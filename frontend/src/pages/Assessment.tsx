@@ -4,7 +4,7 @@ import { Clock, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ProblemViewer } from '@/components/molecules/ProblemViewer';
-import { CodeEditorMock } from '@/components/molecules/CodeEditorMock';
+import { AssessmentInput } from '@/components/molecules/AssessmentInput';
 import { ConsoleOutput } from '@/components/molecules/ConsoleOutput';
 import { WebcamMonitor } from '@/components/molecules/WebcamMonitor';
 import {
@@ -12,6 +12,8 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
+import { mockQuestions } from '@/lib/mock-data';
+import { AssessmentQuestion } from '@/types/assessment';
 
 interface ConsoleLog {
   type: 'log' | 'error' | 'info' | 'success';
@@ -21,12 +23,20 @@ interface ConsoleLog {
 
 export default function Assessment() {
   const { id } = useParams<{ id: string }>();
-  const [currentQuestion, setCurrentQuestion] = useState(1);
+
+  // State
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, any>>({});
   const [isRunning, setIsRunning] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
   const [consoleExpanded, setConsoleExpanded] = useState(false);
-  const totalQuestions = 5;
 
+  // Derived State
+  const currentQuestion: AssessmentQuestion = mockQuestions[currentQuestionIndex];
+  const totalQuestions = mockQuestions.length;
+  const currentAnswer = answers[currentQuestion.id];
+
+  // Logic
   const addLog = useCallback((type: ConsoleLog['type'], message: string) => {
     setConsoleLogs((prev) => [...prev, { type, message, timestamp: new Date() }]);
   }, []);
@@ -35,65 +45,74 @@ export default function Assessment() {
     setConsoleLogs([]);
   }, []);
 
-  const handleRunCode = useCallback(async (code: string) => {
+  const handleAnswerChange = (value: any) => {
+    setAnswers(prev => ({
+      ...prev,
+      [currentQuestion.id]: value
+    }));
+  };
+
+  const handleRunCode = async () => {
+    if (currentQuestion.type !== 'coding') return;
+
     setIsRunning(true);
-    
-    // Log the code execution attempt
-    addLog('info', 'Submitting code to server...');
-    addLog('log', `POST /submit-test`);
-    addLog('log', `Assessment ID: ${id}`);
-    addLog('log', `Code length: ${code.length} characters`);
+    addLog('info', 'Compiling and running code...');
 
-    // Simulate API call to Flask backend
-    try {
-      // Mock API request
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      // Log mock request details
-      console.log('Mock Flask API Request:', {
-        endpoint: 'POST /submit-test',
-        payload: {
-          assessmentId: id,
-          questionNumber: currentQuestion,
-          code: code,
-          timestamp: new Date().toISOString(),
-        },
-      });
+    // Simulate execution
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
-      addLog('info', 'Server received code submission');
-      addLog('log', 'Running test cases...');
-      
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      
-      // Mock output
-      addLog('log', '');
-      addLog('log', '=== Test Results ===');
-      addLog('success', '✓ Test Case 1: Passed (nums=[2,7,11,15], target=9)');
-      addLog('success', '✓ Test Case 2: Passed (nums=[3,2,4], target=6)');
-      addLog('success', '✓ Test Case 3: Passed (nums=[3,3], target=6)');
-      addLog('log', '');
-      addLog('success', 'All test cases passed! (3/3)');
-      addLog('log', 'Execution time: 45ms');
-      addLog('log', 'Memory usage: 14.2 MB');
-      
-    } catch (error) {
-      addLog('error', 'Failed to connect to server');
-      addLog('error', 'Please check your network connection');
-    } finally {
-      setIsRunning(false);
+    addLog('success', 'All test cases passed!');
+    setIsRunning(false);
+  };
+
+  const handleSubmitQuestion = () => {
+    if (currentQuestion.type === 'coding') {
+      handleRunCode();
+    } else {
+      // For non-coding questions, just move to next if available
+      if (currentQuestionIndex < totalQuestions - 1) {
+        handleNext();
+      } else {
+        addLog('success', 'Assessment completed! Answers saved.');
+      }
     }
-  }, [id, currentQuestion, addLog]);
+  };
 
   const handlePrevious = () => {
-    if (currentQuestion > 1) {
-      setCurrentQuestion(currentQuestion - 1);
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
     }
   };
 
   const handleNext = () => {
-    if (currentQuestion < totalQuestions) {
-      setCurrentQuestion(currentQuestion + 1);
+    if (currentQuestionIndex < totalQuestions - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
     }
+  };
+
+  // Helper to map current question props to ProblemViewer
+  const getProblemViewerProps = () => {
+    const props: any = {
+      problemTitle: currentQuestion.title,
+      problemDescription: currentQuestion.description,
+    };
+
+    if (currentQuestion.type === 'coding') {
+      props.examples = currentQuestion.examples;
+      props.constraints = currentQuestion.constraints;
+    } else if (currentQuestion.type === 'mcq') {
+      props.instructions = [
+        "Select the best option from the available choices.",
+        "Read the scenario carefully."
+      ];
+    } else if (currentQuestion.type === 'text') {
+      props.instructions = [
+        "Be concise and clear in your response.",
+        `Maximum ${currentQuestion.maxLength} characters allowed.`
+      ];
+    }
+
+    return props;
   };
 
   return (
@@ -101,9 +120,9 @@ export default function Assessment() {
       {/* Assessment Header */}
       <div className="h-12 border-b border-border/50 bg-muted/20 flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-sm font-medium">Technical Assessment</h1>
+          <h1 className="text-sm font-medium">Assessment Framework</h1>
           <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
-            {id}
+            {currentQuestion.type.toUpperCase()}
           </span>
         </div>
 
@@ -117,11 +136,11 @@ export default function Assessment() {
           {/* Progress */}
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">
-              Question {currentQuestion} of {totalQuestions}
+              Question {currentQuestionIndex + 1} of {totalQuestions}
             </span>
-            <Progress 
-              value={(currentQuestion / totalQuestions) * 100} 
-              className="w-24 h-2" 
+            <Progress
+              value={((currentQuestionIndex + 1) / totalQuestions) * 100}
+              className="w-24 h-2"
             />
           </div>
 
@@ -132,7 +151,7 @@ export default function Assessment() {
               size="icon"
               className="h-8 w-8"
               onClick={handlePrevious}
-              disabled={currentQuestion === 1}
+              disabled={currentQuestionIndex === 0}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -141,7 +160,7 @@ export default function Assessment() {
               size="icon"
               className="h-8 w-8"
               onClick={handleNext}
-              disabled={currentQuestion === totalQuestions}
+              disabled={currentQuestionIndex === totalQuestions - 1}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -152,31 +171,36 @@ export default function Assessment() {
       {/* Main Split View */}
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup direction="horizontal">
-          {/* Left Panel - Problem Viewer */}
+          {/* Left Panel - Context Area */}
           <ResizablePanel defaultSize={40} minSize={30}>
-            <ProblemViewer />
+            <ProblemViewer {...getProblemViewerProps()} />
           </ResizablePanel>
 
           <ResizableHandle withHandle />
 
-          {/* Right Panel - Code Editor + Console */}
+          {/* Right Panel - Input Area */}
           <ResizablePanel defaultSize={60} minSize={40}>
             <div className="h-full flex flex-col">
-              {/* Code Editor */}
-              <div className="flex-1 min-h-0">
-                <CodeEditorMock 
-                  onRunCode={handleRunCode}
+              {/* Input Component Switcher */}
+              <div className="flex-1 min-h-0 relative">
+                <AssessmentInput
+                  question={currentQuestion}
+                  answer={currentAnswer}
+                  onAnswerChange={handleAnswerChange}
+                  onSubmit={handleSubmitQuestion}
                   isRunning={isRunning}
                 />
               </div>
 
-              {/* Console */}
-              <ConsoleOutput
-                logs={consoleLogs}
-                onClear={clearLogs}
-                isExpanded={consoleExpanded}
-                onToggleExpand={() => setConsoleExpanded(!consoleExpanded)}
-              />
+              {/* Console - Only for Coding Questions */}
+              {currentQuestion.type === 'coding' && (
+                <ConsoleOutput
+                  logs={consoleLogs}
+                  onClear={clearLogs}
+                  isExpanded={consoleExpanded}
+                  onToggleExpand={() => setConsoleExpanded(!consoleExpanded)}
+                />
+              )}
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>

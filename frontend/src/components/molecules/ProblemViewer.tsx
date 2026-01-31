@@ -7,11 +7,12 @@ interface ProblemViewerProps {
   problemDescription?: string;
   instructions?: string[];
   examples?: Array<{ input: string; output: string; explanation?: string }>;
+  constraints?: string[];
 }
 
 export function ProblemViewer({
-  problemTitle = "Two Sum",
-  problemDescription = "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.\n\nYou can return the answer in any order.",
+  problemTitle = "Problem Statement",
+  problemDescription = "No description available.",
   instructions = [
     "Read the problem statement carefully before starting.",
     "You have 45 minutes to complete this assessment.",
@@ -20,21 +21,8 @@ export function ProblemViewer({
     "Do not switch tabs or windows during the assessment.",
     "Your webcam and screen are being monitored.",
   ],
-  examples = [
-    {
-      input: "nums = [2,7,11,15], target = 9",
-      output: "[0,1]",
-      explanation: "Because nums[0] + nums[1] == 9, we return [0, 1].",
-    },
-    {
-      input: "nums = [3,2,4], target = 6",
-      output: "[1,2]",
-    },
-    {
-      input: "nums = [3,3], target = 6",
-      output: "[0,1]",
-    },
-  ],
+  examples = [],
+  constraints = [],
 }: ProblemViewerProps) {
   const [activeTab, setActiveTab] = useState('problem');
 
@@ -76,41 +64,44 @@ export function ProblemViewer({
             </p>
           </div>
 
-          {/* Examples */}
-          <div className="space-y-4">
-            <h3 className="font-medium">Examples</h3>
-            {examples.map((example, index) => (
-              <div
-                key={index}
-                className="bg-muted/50 rounded-lg p-4 space-y-2 font-mono text-sm"
-              >
-                <div>
-                  <span className="text-muted-foreground">Input: </span>
-                  <span className="text-foreground">{example.input}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Output: </span>
-                  <span className="text-primary">{example.output}</span>
-                </div>
-                {example.explanation && (
-                  <div className="text-muted-foreground text-xs pt-1 border-t border-border/50">
-                    {example.explanation}
+          {/* Examples - Only render if present */}
+          {examples.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="font-medium">Examples</h3>
+              {examples.map((example, index) => (
+                <div
+                  key={index}
+                  className="bg-muted/50 rounded-lg p-4 space-y-2 font-mono text-sm"
+                >
+                  <div>
+                    <span className="text-muted-foreground">Input: </span>
+                    <span className="text-foreground">{example.input}</span>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  <div>
+                    <span className="text-muted-foreground">Output: </span>
+                    <span className="text-primary">{example.output}</span>
+                  </div>
+                  {example.explanation && (
+                    <div className="text-muted-foreground text-xs pt-1 border-t border-border/50">
+                      {example.explanation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
-          {/* Constraints */}
-          <div className="space-y-2">
-            <h3 className="font-medium">Constraints</h3>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• 2 ≤ nums.length ≤ 10⁴</li>
-              <li>• -10⁹ ≤ nums[i] ≤ 10⁹</li>
-              <li>• -10⁹ ≤ target ≤ 10⁹</li>
-              <li>• Only one valid answer exists.</li>
-            </ul>
-          </div>
+          {/* Constraints - Only render if present */}
+          {constraints.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="font-medium">Constraints</h3>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                {constraints.map((constraint, index) => (
+                  <li key={index}>• {constraint}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="instructions" className="flex-1 overflow-auto p-6 m-0">

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Play, RotateCcw, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,9 +12,10 @@ import { cn } from '@/lib/utils';
 interface CodeEditorMockProps {
   onRunCode: (code: string) => void;
   isRunning?: boolean;
+  initialCode?: string;
 }
 
-const defaultCode = `def two_sum(nums: list[int], target: int) -> list[int]:
+const defaultCodeStr = `def two_sum(nums: list[int], target: int) -> list[int]:
     """
     Find two indices whose values sum to target.
     
@@ -50,15 +51,23 @@ const languages = [
   { id: 'java', name: 'Java', extension: '.java' },
 ];
 
-export function CodeEditorMock({ onRunCode, isRunning = false }: CodeEditorMockProps) {
-  const [code, setCode] = useState(defaultCode);
+export function CodeEditorMock({
+  onRunCode,
+  isRunning = false,
+  initialCode = defaultCodeStr
+}: CodeEditorMockProps) {
+  const [code, setCode] = useState(initialCode);
   const [selectedLanguage, setSelectedLanguage] = useState(languages[0]);
+
+  useEffect(() => {
+    setCode(initialCode);
+  }, [initialCode]);
 
   const lines = code.split('\n');
 
   const handleReset = useCallback(() => {
-    setCode(defaultCode);
-  }, []);
+    setCode(initialCode); // Reset to the specific problem's template, not defaultCodeStr
+  }, [initialCode]);
 
   const handleRunCode = useCallback(() => {
     onRunCode(code);
