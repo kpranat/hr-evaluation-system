@@ -1,0 +1,59 @@
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+// Layouts
+import { CandidateLayout } from "@/components/layouts/CandidateLayout";
+import { AdminLayout } from "@/components/layouts/AdminLayout";
+
+// Candidate Pages
+import Landing from "@/pages/Landing";
+import CandidateHome from "@/pages/CandidateHome";
+import Assessment from "@/pages/Assessment";
+
+// Admin Pages
+import Dashboard from "@/pages/admin/Dashboard";
+import Candidates from "@/pages/admin/Candidates";
+import CandidateDetail from "@/pages/admin/CandidateDetail";
+import Settings from "@/pages/admin/Settings";
+
+// Other
+import NotFound from "@/pages/NotFound";
+
+const queryClient = new QueryClient();
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <div className="min-h-screen bg-background text-foreground">
+          <Routes>
+            {/* Candidate Flow - Minimal Layout */}
+            <Route element={<CandidateLayout />}>
+              <Route path="/" element={<Landing />} />
+              <Route path="/candidate" element={<CandidateHome />} />
+              <Route path="/assessment/:id" element={<Assessment />} />
+            </Route>
+
+            {/* Admin/Recruiter Flow - Dashboard Layout */}
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="candidates" element={<Candidates />} />
+              <Route path="candidate/:id" element={<CandidateDetail />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
+
+            {/* 404 */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </div>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
+
+export default App;
