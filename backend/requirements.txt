@@ -1,4 +1,9 @@
 flask
 flask-cors
+flask-sqlalchemy
 python-dotenv
+psycopg2-binary
+PyJWT
 groq
+pandas
+openpyxl

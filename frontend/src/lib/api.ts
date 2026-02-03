@@ -40,6 +40,28 @@ async function request<T>(
 // ============ Candidate Endpoints ============
 
 export const candidateApi = {
+  /** Login candidate */
+  login: async (email: string, password: string) => {
+    return request('/api/candidate/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  /** Verify JWT token */
+  verifyToken: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No token found' };
+    }
+
+    return request('/api/candidate/verify', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+
   /** Upload resume for evaluation */
   uploadResume: async (file: File) => {
     const formData = new FormData();
@@ -76,6 +98,40 @@ export const adminApi = {
   /** Get single candidate details */
   getCandidate: async (candidateId: string) => {
     return request(`/api/admin/candidates/${candidateId}`);
+  },
+
+  /** Upload candidates from CSV/Excel file */
+  uploadCandidates: async (file: File) => {
+    const token = localStorage.getItem('recruiter_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_BASE_URL}/api/recruiter/candidates/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { data: null, error: data.message || 'Upload failed' };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'An error occurred during upload',
+      };
+    }
   },
 
   /** Get analytics dashboard data */

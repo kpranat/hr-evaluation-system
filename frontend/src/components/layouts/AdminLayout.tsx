@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { Logo } from '@/components/atoms/Logo';
 import { NavItem } from '@/components/molecules/NavItem';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,16 @@ const navItems = [
  */
 export function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    // Remove auth data from localStorage
+    localStorage.removeItem('recruiter_token');
+    localStorage.removeItem('recruiter_user');
+    
+    // Redirect to home page
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen bg-background flex w-full">
@@ -81,7 +91,7 @@ export function AdminLayout() {
         {/* Top Bar */}
         <header className="h-14 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
           <div className="flex items-center gap-4">
-            <h1 className="text-sm font-medium text-muted-foreground">
+            <h1 className="text-sm font-medium  onClick={handleLogout} title="Logout"text-muted-foreground">
               HR Evaluation System
             </h1>
           </div>

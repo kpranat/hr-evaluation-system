@@ -1,0 +1,4 @@
+email,password
+test.candidate1@example.com,password123
+test.candidate2@example.com,securePass456
+test.candidate3@example.com,myPass789

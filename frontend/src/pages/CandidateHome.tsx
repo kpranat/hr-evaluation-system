@@ -1,14 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, ArrowRight, FileText, Brain, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { candidateApi } from '@/lib/api';
 
 export default function CandidateHome() {
   const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const result = await candidateApi.verifyToken();
+      if (!(result.data as any)?.valid) {
+        navigate('/candidate/login');
+      }
+    };
+    checkAuth();
+  }, [navigate]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

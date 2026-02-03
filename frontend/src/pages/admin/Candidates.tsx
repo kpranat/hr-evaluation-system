@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
-import { Search, Filter, MoreHorizontal } from 'lucide-react';
+import { useState } from 'react';
+import { Search, Filter, MoreHorizontal, Upload } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/atoms/StatusBadge';
+import BulkUploadDialog from '@/components/molecules/BulkUploadDialog';
 import {
   Table,
   TableBody,
@@ -44,6 +46,14 @@ const mockCandidates = [
 ];
 
 export default function Candidates() {
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+
+  const handleUploadComplete = () => {
+    // Refresh candidates list or show success message
+    console.log('Upload completed successfully');
+    // You can add logic here to refresh the candidates list
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
@@ -54,7 +64,10 @@ export default function Candidates() {
             Manage and review all candidate assessments.
           </p>
         </div>
-        <Button>Add Candidate</Button>
+        <Button onClick={() => setUploadDialogOpen(true)}>
+          <Upload className="mr-2 h-4 w-4" />
+          Add Candidates
+        </Button>
       </div>
 
       {/* Filters */}
@@ -112,6 +125,13 @@ export default function Candidates() {
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {candidate.date}
+
+      {/* Bulk Upload Dialog */}
+      <BulkUploadDialog
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+        onUploadComplete={handleUploadComplete}
+      />
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="icon">

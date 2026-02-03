@@ -4,7 +4,13 @@ from dotenv import load_dotenv
 load_dotenv()  # load .env → environment variables
 
 class Config:
+    # Database configuration
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    #setup jwt token
+    # Security
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+    
+    # JWT token configuration
     JWT_SECRET = os.getenv("JWT_SECRET", "your_jwt_secret")
-    JWT_EXP_MINUTES = int(os.getenv("JWT_EXP_MINUTES", 10))
+    JWT_EXP_MINUTES = int(os.getenv("JWT_EXP_MINUTES", 1440))  # 24 hours default

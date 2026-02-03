@@ -7,11 +7,16 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 // Layouts
 import { CandidateLayout } from "@/components/layouts/CandidateLayout";
 import { AdminLayout } from "@/components/layouts/AdminLayout";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Candidate Pages
 import Landing from "@/pages/Landing";
 import CandidateHome from "@/pages/CandidateHome";
+import CandidateLogin from "@/pages/CandidateLogin";
 import Assessment from "@/pages/Assessment";
+
+// Recruiter Pages
+import RecruiterLogin from "@/pages/RecruiterLogin";
 
 // Admin Pages
 import Dashboard from "@/pages/admin/Dashboard";
@@ -35,12 +40,25 @@ const App = () => (
             {/* Candidate Flow - Minimal Layout */}
             <Route element={<CandidateLayout />}>
               <Route path="/" element={<Landing />} />
+              <Route path="/candidate/login" element={<CandidateLogin />} />
               <Route path="/candidate" element={<CandidateHome />} />
               <Route path="/assessment/:id" element={<Assessment />} />
             </Route>
 
-            {/* Admin/Recruiter Flow - Dashboard Layout */}
-            <Route path="/admin" element={<AdminLayout />}>
+            {/* Recruiter Login - Minimal Layout */}
+            <Route element={<CandidateLayout />}>
+              <Route path="/recruiter/login" element={<RecruiterLogin />} />
+            </Route>
+
+            {/* Admin/Recruiter Flow - Dashboard Layout (Protected) */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="candidates" element={<Candidates />} />
               <Route path="candidate/:id" element={<CandidateDetail />} />

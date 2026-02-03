@@ -28,7 +28,7 @@ export default function Landing() {
           {/* Candidate Card */}
           <Card
             className="group relative overflow-hidden p-8 hover:border-primary/50 transition-all duration-300 hover:shadow-lg cursor-pointer text-left"
-            onClick={() => navigate('/candidate')}
+            onClick={() => navigate('/candidate/login')}
           >
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <Code className="h-24 w-24" />
@@ -40,11 +40,11 @@ export default function Landing() {
               <div>
                 <h3 className="text-2xl font-semibold">I'm a Candidate</h3>
                 <p className="text-muted-foreground mt-2">
-                  Ready to prove your skills? Upload your resume and start the assessment.
+                  Sign in to access your assessment dashboard and prove your skills.
                 </p>
               </div>
               <Button className="w-full gap-2 group-hover:bg-primary/90">
-                Start Assessment
+                Sign In
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
@@ -53,7 +53,7 @@ export default function Landing() {
           {/* Recruiter Card */}
           <Card
             className="group relative overflow-hidden p-8 hover:border-purple-500/50 transition-all duration-300 hover:shadow-lg cursor-pointer text-left"
-            onClick={() => navigate('/admin/dashboard')}
+            onClick={() => navigate('/recruiter/login')}
           >
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <Users className="h-24 w-24" />
@@ -69,7 +69,7 @@ export default function Landing() {
                 </p>
               </div>
               <Button variant="outline" className="w-full gap-2 border-purple-500/20 hover:bg-purple-500/10 hover:text-purple-500">
-                Go to Dashboard
+                Sign In
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
@@ -78,7 +78,7 @@ export default function Landing() {
 
         {/* Footer info */}
         <p className="text-sm text-muted-foreground">
-          Select your role to continue. No authentication required for testing.
+          Select your role to continue with secure authentication.
         </p>
       </div>
     </div>
