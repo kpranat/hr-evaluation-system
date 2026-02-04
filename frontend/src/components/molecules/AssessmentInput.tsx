@@ -1,5 +1,6 @@
 import { AssessmentQuestion } from '@/types/assessment';
 import { CodeEditorMock } from './CodeEditorMock';
+import { PsychometricSlider } from './PsychometricSlider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -36,6 +37,30 @@ export function AssessmentInput({
 
     // Render MCQ Interface (handles both API format and mock format)
     if (question.type === 'mcq' || question.options) {
+        // Check if this is a psychometric question (has trait_type or scoring_direction)
+        const isPsychometric = 'trait_type' in question || 'scoring_direction' in question;
+        
+        // If it's a psychometric question, use the slider
+        if (isPsychometric && question.options.length === 5) {
+            const labels = question.options.map(opt => opt.text);
+            
+            return (
+                <div className="h-full flex flex-col p-8 max-w-3xl mx-auto w-full justify-center">
+                    <PsychometricSlider
+                        value={answer}
+                        onChange={onAnswerChange}
+                        labels={labels}
+                    />
+                    <div className="mt-8 flex justify-center">
+                        <Button onClick={onSubmit} size="lg" disabled={!answer} className="min-w-[200px]">
+                            Next Question
+                        </Button>
+                    </div>
+                </div>
+            );
+        }
+        
+        // Regular MCQ with radio buttons
         return (
             <div className="h-full flex flex-col p-6 max-w-2xl mx-auto w-full">
                 <h3 className="text-lg font-medium mb-6">Select the best answer:</h3>
