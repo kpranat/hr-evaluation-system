@@ -46,6 +46,10 @@ def create_app():
     # MCQ management routes
     from .MCQ import MCQ
     app.register_blueprint(MCQ, url_prefix='/api/mcq')
+    
+    # Psychometric assessment routes
+    from .Psychometric import psychometric_bp
+    app.register_blueprint(psychometric_bp, url_prefix='/api/psychometric')
 
     # Import models before creating tables
     from . import models

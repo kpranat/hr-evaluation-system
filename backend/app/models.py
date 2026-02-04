@@ -126,3 +126,95 @@ class MCQResult(db.Model):
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
         }
 
+#====================== Psychometric Questions ============================
+class PsychometricQuestion(db.Model):
+    __tablename__ = 'psychometric_questions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    question_id = db.Column(db.Integer, unique=True, nullable=False)  # Unique question identifier
+    question = db.Column(db.Text, nullable=False)  # Question text
+    trait_type = db.Column(db.Integer, nullable=False)  # 1-5 for Big Five traits
+    scoring_direction = db.Column(db.String(1), nullable=False)  # '+' or '-' for scoring
+    is_active = db.Column(db.Boolean, default=True, nullable=False)  # Whether question is in current pool
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Trait type mapping: 1=Extraversion, 2=Agreeableness, 3=Conscientiousness, 4=Emotional Stability, 5=Intellect/Imagination
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'question_id': self.question_id,
+            'question': self.question,
+            'trait_type': self.trait_type,
+            'scoring_direction': self.scoring_direction,
+            'is_active': self.is_active
+        }
+
+#====================== Psychometric Test Configuration ============================
+class PsychometricTestConfig(db.Model):
+    __tablename__ = 'psychometric_test_config'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    recruiter_id = db.Column(db.Integer, db.ForeignKey('recruiter_auth.id'), nullable=False)
+    num_questions = db.Column(db.Integer, nullable=False, default=50)  # Number of questions to show
+    selection_mode = db.Column(db.String(20), nullable=False, default='random')  # 'random' or 'manual'
+    selected_question_ids = db.Column(db.Text, nullable=True)  # JSON array of selected question IDs
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationship to recruiter
+    recruiter = db.relationship('RecruiterAuth', backref=db.backref('psychometric_configs'))
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'recruiter_id': self.recruiter_id,
+            'num_questions': self.num_questions,
+            'selection_mode': self.selection_mode,
+            'selected_question_ids': self.selected_question_ids,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+#====================== Psychometric Results ============================
+class PsychometricResult(db.Model):
+    __tablename__ = 'psychometric_results'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('candidate_auth.id'), nullable=False, unique=True)
+    
+    # Big Five personality scores (0-50 for each trait)
+    extraversion = db.Column(db.Float, default=0.0, nullable=False)
+    agreeableness = db.Column(db.Float, default=0.0, nullable=False)
+    conscientiousness = db.Column(db.Float, default=0.0, nullable=False)
+    emotional_stability = db.Column(db.Float, default=0.0, nullable=False)
+    intellect_imagination = db.Column(db.Float, default=0.0, nullable=False)
+    
+    # Metadata
+    questions_answered = db.Column(db.Integer, default=0, nullable=False)
+    test_completed = db.Column(db.Boolean, default=False, nullable=False)
+    answers_json = db.Column(db.Text, nullable=True)  # JSON array of all answers
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationship to candidate
+    candidate = db.relationship('CandidateAuth', backref=db.backref('psychometric_result', uselist=False))
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'student_id': self.student_id,
+            'extraversion': self.extraversion,
+            'agreeableness': self.agreeableness,
+            'conscientiousness': self.conscientiousness,
+            'emotional_stability': self.emotional_stability,
+            'intellect_imagination': self.intellect_imagination,
+            'questions_answered': self.questions_answered,
+            'test_completed': self.test_completed,
+            'last_updated': self.last_updated.isoformat() if self.last_updated else None
+        }
+

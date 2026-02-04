@@ -17,7 +17,7 @@ import { AssessmentQuestion } from '@/types/assessment';
 import { AssessmentRound, ROUND_CONFIGS, ROUND_ORDER, RoundProgress } from '@/types/rounds';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { mcqApi, candidateApi } from '@/lib/api';
+import { mcqApi, candidateApi, psychometricApi } from '@/lib/api';
 
 interface ConsoleLog {
   type: 'log' | 'error' | 'info' | 'success';
@@ -48,8 +48,10 @@ export default function Assessment() {
   const [mcqQuestions, setMcqQuestions] = useState<any[]>([]);
   const [mcqSubmitting, setMcqSubmitting] = useState(false);
 
-  // Prefetch psychometric questions (load in background)
+  // Psychometric specific state - real questions from API
+  const [psychometricQuestions, setPsychometricQuestions] = useState<any[]>([]);
   const [psychometricQuestionsReady, setPsychometricQuestionsReady] = useState(false);
+  const [psychometricSubmitting, setPsychometricSubmitting] = useState(false);
 
   // Question State
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -61,6 +63,13 @@ export default function Assessment() {
   useEffect(() => {
     if (currentRound === 'mcq' && mcqQuestions.length === 0) {
       loadMCQQuestions();
+    }
+  }, [currentRound]);
+
+  // Load Psychometric questions when on psychometric round
+  useEffect(() => {
+    if (currentRound === 'psychometric' && psychometricQuestions.length === 0) {
+      loadPsychometricQuestions();
     }
   }, [currentRound]);
 
@@ -93,12 +102,80 @@ export default function Assessment() {
   };
 
   const prefetchPsychometricQuestions = async () => {
-    // Simulate prefetching (you can add actual API call here later)
-    console.log('🔄 Prefetching psychometric questions in background...');
-    setTimeout(() => {
-      setPsychometricQuestionsReady(true);
-      console.log('✅ Psychometric questions ready');
-    }, 1000);
+    try {
+      console.log('🔄 Prefetching psychometric questions in background...');
+      
+      const token = localStorage.getItem('candidate_token');
+      if (!token) return;
+      
+      const candidateData = JSON.parse(atob(token.split('.')[1]));
+      const response = await psychometricApi.startTest(candidateData.user_id);
+      
+      if (response.data?.success) {
+        console.log(`✅ Loaded ${response.data.questions.length} psychometric questions`);
+        
+        // Transform psychometric questions to include type and options
+        const transformedQuestions = response.data.questions.map((q: any) => ({
+          ...q,
+          type: 'mcq',
+          options: response.data.answer_options.map((opt: any) => ({
+            id: opt.value,
+            text: opt.label
+          }))
+        }));
+        
+        setPsychometricQuestions(transformedQuestions);
+        setPsychometricQuestionsReady(true);
+      }
+    } catch (error) {
+      console.error('❌ Error prefetching psychometric questions:', error);
+    }
+  };
+
+  const loadPsychometricQuestions = async () => {
+    try {
+      console.log('📥 Loading psychometric questions from API...');
+      
+      const token = localStorage.getItem('candidate_token');
+      if (!token) {
+        addLog('error', 'Please login first');
+        navigate('/candidate/login');
+        return;
+      }
+      
+      const candidateData = JSON.parse(atob(token.split('.')[1]));
+      const response = await psychometricApi.startTest(candidateData.user_id);
+      
+      if (response.error) {
+        console.error('❌ Error loading psychometric questions:', response.error);
+        addLog('error', `Failed to load psychometric questions: ${response.error}`);
+        return;
+      }
+      
+      if (response.data?.success && response.data.questions && response.data.questions.length > 0) {
+        console.log(`✅ Loaded ${response.data.questions.length} psychometric questions`);
+        
+        // Transform psychometric questions to include type and options
+        const transformedQuestions = response.data.questions.map((q: any) => ({
+          ...q,
+          type: 'mcq',
+          options: response.data.answer_options.map((opt: any) => ({
+            id: opt.value,
+            text: opt.label
+          }))
+        }));
+        
+        setPsychometricQuestions(transformedQuestions);
+        setPsychometricQuestionsReady(true);
+        addLog('success', `Loaded ${response.data.questions.length} psychometric questions`);
+      } else {
+        console.warn('⚠️ No psychometric questions available');
+        addLog('error', 'No psychometric questions available. Please contact administrator.');
+      }
+    } catch (error) {
+      console.error('❌ Exception loading psychometric questions:', error);
+      addLog('error', 'Failed to load psychometric questions');
+    }
   };
 
   // Check candidate status and round completion on mount
@@ -150,6 +227,8 @@ export default function Assessment() {
   // Derived State
   const currentRoundQuestions = currentRound === 'mcq' && mcqQuestions.length > 0 
     ? mcqQuestions 
+    : currentRound === 'psychometric' && psychometricQuestions.length > 0
+    ? psychometricQuestions
     : questionsByRound[currentRound];
   const currentQuestion: any = currentRoundQuestions[currentQuestionIndex];
   const totalQuestions = currentRoundQuestions.length;
@@ -236,6 +315,41 @@ export default function Assessment() {
     }
   };
 
+  const submitAllPsychometricAnswers = async () => {
+    setPsychometricSubmitting(true);
+    try {
+      addLog('info', 'Submitting psychometric test answers...');
+      
+      const answers = roundProgress.psychometric.answers;
+      const token = localStorage.getItem('candidate_token');
+      if (!token) {
+        addLog('error', 'Session expired');
+        return;
+      }
+      
+      const candidateData = JSON.parse(atob(token.split('.')[1]));
+      
+      // Convert answers to API format
+      const formattedAnswers = Object.entries(answers).map(([questionId, answer]) => ({
+        question_id: parseInt(questionId),
+        answer: answer as number
+      }));
+      
+      const response = await psychometricApi.submitTest(candidateData.user_id, formattedAnswers);
+      
+      if (response.data?.success) {
+        addLog('success', 'Psychometric test submitted successfully!');
+      } else {
+        addLog('error', response.data?.error || 'Failed to submit psychometric test');
+      }
+      
+    } catch (error) {
+      addLog('error', 'Failed to submit psychometric test');
+    } finally {
+      setPsychometricSubmitting(false);
+    }
+  };
+
   const completeCurrentRound = async () => {
     // Mark round as completed in state
     setRoundProgress(prev => ({
@@ -304,6 +418,34 @@ export default function Assessment() {
       return;
     }
     
+    // Handle Psychometric submission - save answer and move to next
+    if (currentRound === 'psychometric' && psychometricQuestions.length > 0) {
+      const selectedAnswer = currentAnswer;
+      
+      if (!selectedAnswer) {
+        addLog('error', 'Please select an answer before submitting');
+        return;
+      }
+      
+      addLog('success', `Answer saved for Question ${currentQuestionIndex + 1}`);
+      
+      // Move to next question or complete round
+      if (currentQuestionIndex < totalQuestions - 1) {
+        handleNext();
+      } else {
+        // Psychometric round completed - submit all answers
+        await submitAllPsychometricAnswers();
+        await completeCurrentRound();
+        addLog('success', 'Psychometric assessment completed! Moving to next round...');
+        
+        // Move to next round
+        setTimeout(() => {
+          moveToNextRound();
+        }, 500);
+      }
+      return;
+    }
+    
     // Handle other question types
     if (currentQuestion.type === 'coding') {
       handleRunCode();
@@ -346,6 +488,19 @@ export default function Assessment() {
         instructions: [
           "Select the best option from the available choices.",
           "Your answer will be checked immediately after submission."
+        ]
+      };
+    }
+
+    // Handle Psychometric questions from API
+    if (currentRound === 'psychometric' && psychometricQuestions.length > 0) {
+      return {
+        problemTitle: `Statement ${currentQuestionIndex + 1} of ${totalQuestions}`,
+        problemDescription: currentQuestion.question,
+        instructions: [
+          "Describe yourself as you generally are now, not as you wish to be in the future.",
+          "Answer honestly in relation to other people you know of the same age.",
+          "Select the option that best describes you."
         ]
       };
     }
@@ -393,6 +548,18 @@ export default function Assessment() {
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="text-muted-foreground">Loading MCQ questions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state when Psychometric questions are being loaded
+  if (currentRound === 'psychometric' && psychometricQuestions.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Loading psychometric questions...</p>
         </div>
       </div>
     );

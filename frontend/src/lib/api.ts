@@ -199,8 +199,73 @@ export const mcqApi = {
   },
 };
 
+// ============ Psychometric Endpoints ============
+
+export const psychometricApi = {
+  /** Load questions into database (one-time setup) */
+  loadQuestions: async () => {
+    return request('/api/psychometric/load-questions', {
+      method: 'POST',
+    });
+  },
+
+  /** Get all psychometric questions (for recruiter) */
+  getAllQuestions: async () => {
+    return request('/api/psychometric/questions/all', {
+      method: 'GET',
+    });
+  },
+
+  /** Set test configuration (recruiter) */
+  setConfig: async (recruiterId: number, numQuestions: number, selectionMode: 'random' | 'manual', selectedQuestionIds?: number[]) => {
+    return request('/api/psychometric/config/set', {
+      method: 'POST',
+      body: JSON.stringify({
+        recruiter_id: recruiterId,
+        num_questions: numQuestions,
+        selection_mode: selectionMode,
+        selected_question_ids: selectedQuestionIds,
+      }),
+    });
+  },
+
+  /** Get current test configuration */
+  getCurrentConfig: async (recruiterId: number) => {
+    return request(`/api/psychometric/config/current?recruiter_id=${recruiterId}`, {
+      method: 'GET',
+    });
+  },
+
+  /** Start psychometric test (candidate) */
+  startTest: async (candidateId: number) => {
+    return request('/api/psychometric/test/start', {
+      method: 'POST',
+      body: JSON.stringify({ candidate_id: candidateId }),
+    });
+  },
+
+  /** Submit psychometric test answers */
+  submitTest: async (candidateId: number, answers: { question_id: number; answer: number }[]) => {
+    return request('/api/psychometric/test/submit', {
+      method: 'POST',
+      body: JSON.stringify({
+        candidate_id: candidateId,
+        answers: answers,
+      }),
+    });
+  },
+
+  /** Get candidate results */
+  getResults: async (candidateId: number) => {
+    return request(`/api/psychometric/results/${candidateId}`, {
+      method: 'GET',
+    });
+  },
+};
+
 export default {
   candidate: candidateApi,
   admin: adminApi,
   mcq: mcqApi,
+  psychometric: psychometricApi,
 };
