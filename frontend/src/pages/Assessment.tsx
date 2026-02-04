@@ -7,6 +7,7 @@ import { ProblemViewer } from '@/components/molecules/ProblemViewer';
 import { AssessmentInput } from '@/components/molecules/AssessmentInput';
 import { ConsoleOutput } from '@/components/molecules/ConsoleOutput';
 import { WebcamMonitor } from '@/components/molecules/WebcamMonitor';
+import { ActivityMonitor } from '@/components/molecules/ActivityMonitor';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +29,8 @@ import { AssessmentRound, ROUND_CONFIGS, ROUND_ORDER, RoundProgress } from '@/ty
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { mcqApi, candidateApi, psychometricApi } from '@/lib/api';
+import { useProctoring } from '@/hooks/useProctoring';
+import { useCodePlayback } from '@/hooks/useCodePlayback';
 
 interface ConsoleLog {
   type: 'log' | 'error' | 'info' | 'success';
@@ -76,6 +79,28 @@ export default function Assessment() {
   const [unansweredQuestionsList, setUnansweredQuestionsList] = useState<number[]>([]);
   const [pendingSubmitAction, setPendingSubmitAction] = useState<(() => void) | null>(null);
 
+  // AI Proctoring Integration
+  const {
+    sessionId: proctorSessionId,
+    isMonitoring,
+    status: proctorStatus,
+    startSession: startProctorSession,
+    stopSession: stopProctorSession,
+    analyzeFrame
+  } = useProctoring({
+    assessmentId: id,
+    onViolation: (type, data) => {
+      console.log(`🚨 Proctoring violation: ${type}`, data);
+      addLog('error', `Security Alert: ${type.replace('_', ' ')}`);
+    }
+  });
+
+  // Code Playback Recording  
+  const { startRecording, stopRecording, recordChange } = useCodePlayback(
+    proctorSessionId || null,
+    null // questionId will be set dynamically when needed
+  );
+
   // Load MCQ questions when on MCQ round
   useEffect(() => {
     if (currentRound === 'mcq' && mcqQuestions.length === 0) {
@@ -90,22 +115,42 @@ export default function Assessment() {
     }
   }, [currentRound]);
 
+  // Start/Stop Proctoring Session
+  useEffect(() => {
+    const initProctoring = async () => {
+      const sessionId = await startProctorSession();
+      if (sessionId) {
+        console.log('✅ Proctoring session started:', sessionId);
+        addLog('info', 'AI Proctoring activated');
+        startRecording();
+      }
+    };
+
+    initProctoring();
+
+    return () => {
+      stopProctorSession();
+      stopRecording();
+      console.log('🔴 Proctoring session ended');
+    };
+  }, []);
+
   const loadMCQQuestions = async () => {
     try {
       console.log('📥 Loading MCQ questions from API...');
       const response = await mcqApi.getQuestions();
-      
+
       if (response.error) {
         console.error('❌ Error loading MCQ questions:', response.error);
         addLog('error', `Failed to load MCQ questions: ${response.error}`);
         return;
       }
-      
-      if (response.data?.questions && response.data.questions.length > 0) {
-        console.log(`✅ Loaded ${response.data.questions.length} MCQ questions`);
-        setMcqQuestions(response.data.questions);
-        addLog('success', `Loaded ${response.data.questions.length} MCQ questions`);
-        
+
+      if ((response.data as any)?.questions && (response.data as any).questions.length > 0) {
+        console.log(`✅ Loaded ${(response.data as any).questions.length} MCQ questions`);
+        setMcqQuestions((response.data as any).questions);
+        addLog('success', `Loaded ${(response.data as any).questions.length} MCQ questions`);
+
         // Prefetch psychometric questions in background
         prefetchPsychometricQuestions();
       } else {
@@ -121,26 +166,26 @@ export default function Assessment() {
   const prefetchPsychometricQuestions = async () => {
     try {
       console.log('🔄 Prefetching psychometric questions in background...');
-      
+
       const token = localStorage.getItem('candidate_token');
       if (!token) return;
-      
+
       const candidateData = JSON.parse(atob(token.split('.')[1]));
       const response = await psychometricApi.startTest(candidateData.user_id);
-      
-      if (response.data?.success) {
-        console.log(`✅ Loaded ${response.data.questions.length} psychometric questions`);
-        
+
+      if ((response.data as any)?.success) {
+        console.log(`✅ Loaded ${(response.data as any).questions.length} psychometric questions`);
+
         // Transform psychometric questions to include type and options
-        const transformedQuestions = response.data.questions.map((q: any) => ({
+        const transformedQuestions = (response.data as any).questions.map((q: any) => ({
           ...q,
           type: 'mcq',
-          options: response.data.answer_options.map((opt: any) => ({
+          options: (response.data as any).answer_options.map((opt: any) => ({
             id: opt.value,
             text: opt.label
           }))
         }));
-        
+
         setPsychometricQuestions(transformedQuestions);
         setPsychometricQuestionsReady(true);
       }
@@ -152,39 +197,39 @@ export default function Assessment() {
   const loadPsychometricQuestions = async () => {
     try {
       console.log('📥 Loading psychometric questions from API...');
-      
+
       const token = localStorage.getItem('candidate_token');
       if (!token) {
         addLog('error', 'Please login first');
         navigate('/candidate/login');
         return;
       }
-      
+
       const candidateData = JSON.parse(atob(token.split('.')[1]));
       const response = await psychometricApi.startTest(candidateData.user_id);
-      
+
       if (response.error) {
         console.error('❌ Error loading psychometric questions:', response.error);
         addLog('error', `Failed to load psychometric questions: ${response.error}`);
         return;
       }
-      
-      if (response.data?.success && response.data.questions && response.data.questions.length > 0) {
-        console.log(`✅ Loaded ${response.data.questions.length} psychometric questions`);
-        
+
+      if ((response.data as any)?.success && (response.data as any).questions && (response.data as any).questions.length > 0) {
+        console.log(`✅ Loaded ${(response.data as any).questions.length} psychometric questions`);
+
         // Transform psychometric questions to include type and options
-        const transformedQuestions = response.data.questions.map((q: any) => ({
+        const transformedQuestions = (response.data as any).questions.map((q: any) => ({
           ...q,
           type: 'mcq',
-          options: response.data.answer_options.map((opt: any) => ({
+          options: (response.data as any).answer_options.map((opt: any) => ({
             id: opt.value,
             text: opt.label
           }))
         }));
-        
+
         setPsychometricQuestions(transformedQuestions);
         setPsychometricQuestionsReady(true);
-        addLog('success', `Loaded ${response.data.questions.length} psychometric questions`);
+        addLog('success', `Loaded ${(response.data as any).questions.length} psychometric questions`);
       } else {
         console.warn('⚠️ No psychometric questions available');
         addLog('error', 'No psychometric questions available. Please contact administrator.');
@@ -200,46 +245,46 @@ export default function Assessment() {
     const checkCandidateStatus = async () => {
       try {
         const result = await candidateApi.verifyToken();
-        
+
         if (result.error || !(result.data as any)?.valid) {
           navigate('/candidate/login');
           return;
         }
-        
+
         const candidateData = (result.data as any).user;
-        
+
         // Determine which round should be active based on completion status
         let activeRound: AssessmentRound = 'mcq';
         const updatedProgress = { ...roundProgress };
-        
+
         if (candidateData.mcq_completed) {
           updatedProgress.mcq.status = 'completed';
           activeRound = 'psychometric';
         }
-        
+
         if (candidateData.psychometric_completed) {
           updatedProgress.psychometric.status = 'completed';
           activeRound = 'technical';
         }
-        
+
         if (candidateData.technical_completed) {
           updatedProgress.technical.status = 'completed';
           activeRound = 'text-based';
         }
-        
+
         if (candidateData.text_based_completed) {
           updatedProgress['text-based'].status = 'completed';
           // All rounds completed, redirect to home
           navigate('/candidate');
           return;
         }
-        
+
         // If text-based is the active round, redirect to dedicated text-based test page
         if (activeRound === 'text-based') {
           navigate('/candidate/text-based-test');
           return;
         }
-        
+
         setRoundProgress(updatedProgress);
         setCurrentRound(activeRound);
         setLoading(false);
@@ -248,16 +293,16 @@ export default function Assessment() {
         navigate('/candidate/login');
       }
     };
-    
+
     checkCandidateStatus();
   }, [navigate]);
 
   // Derived State
-  const currentRoundQuestions = currentRound === 'mcq' && mcqQuestions.length > 0 
-    ? mcqQuestions 
+  const currentRoundQuestions = currentRound === 'mcq' && mcqQuestions.length > 0
+    ? mcqQuestions
     : currentRound === 'psychometric' && psychometricQuestions.length > 0
-    ? psychometricQuestions
-    : questionsByRound[currentRound];
+      ? psychometricQuestions
+      : questionsByRound[currentRound];
   const currentQuestion: any = currentRoundQuestions[currentQuestionIndex];
   const totalQuestions = currentRoundQuestions.length;
   const currentAnswer = roundProgress[currentRound].answers[currentQuestion?.question_id || currentQuestion?.id];
@@ -313,10 +358,10 @@ export default function Assessment() {
     setMcqSubmitting(true);
     try {
       addLog('info', 'Submitting all MCQ answers for evaluation...');
-      
+
       const answers = roundProgress.mcq.answers;
       let successCount = 0;
-      
+
       // Submit all answers in background (don't wait for responses)
       const submissions = Object.entries(answers).map(async ([questionId, selectedOption]) => {
         try {
@@ -328,13 +373,13 @@ export default function Assessment() {
           console.error(`Failed to submit answer for question ${questionId}:`, error);
         }
       });
-      
+
       // Don't wait for all to complete - let them run in background
       Promise.all(submissions).then(() => {
         console.log(`✅ MCQ evaluation complete: ${successCount}/${Object.keys(answers).length} submitted`);
         addLog('success', `MCQ evaluation complete: ${successCount} answers processed`);
       });
-      
+
     } catch (error) {
       console.error('Error in batch submission:', error);
       addLog('error', 'Some answers may not have been submitted');
@@ -347,30 +392,30 @@ export default function Assessment() {
     setPsychometricSubmitting(true);
     try {
       addLog('info', 'Submitting psychometric test answers...');
-      
+
       const answers = roundProgress.psychometric.answers;
       const token = localStorage.getItem('candidate_token');
       if (!token) {
         addLog('error', 'Session expired');
         return;
       }
-      
+
       const candidateData = JSON.parse(atob(token.split('.')[1]));
-      
+
       // Convert answers to API format
       const formattedAnswers = Object.entries(answers).map(([questionId, answer]) => ({
         question_id: parseInt(questionId),
         answer: answer as number
       }));
-      
+
       const response = await psychometricApi.submitTest(candidateData.user_id, formattedAnswers);
-      
-      if (response.data?.success) {
+
+      if ((response.data as any)?.success) {
         addLog('success', 'Psychometric test submitted successfully!');
       } else {
-        addLog('error', response.data?.error || 'Failed to submit psychometric test');
+        addLog('error', (response.data as any)?.error || 'Failed to submit psychometric test');
       }
-      
+
     } catch (error) {
       addLog('error', 'Failed to submit psychometric test');
     } finally {
@@ -388,7 +433,7 @@ export default function Assessment() {
         completedAt: new Date()
       }
     }));
-    
+
     // Round completion is tracked via batch submission for MCQ
     // For other rounds, you would call their respective completion APIs here
   };
@@ -397,7 +442,7 @@ export default function Assessment() {
     const currentIdx = ROUND_ORDER.indexOf(currentRound);
     if (currentIdx < ROUND_ORDER.length - 1) {
       const nextRound = ROUND_ORDER[currentIdx + 1];
-      
+
       // If next round is text-based, redirect to dedicated page
       if (nextRound === 'text-based') {
         addLog('success', 'Moving to Text-Based Assessment...');
@@ -406,7 +451,7 @@ export default function Assessment() {
         }, 1500);
         return;
       }
-      
+
       setCurrentRound(nextRound);
       setCurrentQuestionIndex(0);
       setRoundProgress(prev => ({
@@ -431,14 +476,14 @@ export default function Assessment() {
     // Handle MCQ submission - just move to next question (batch submit at end)
     if (currentRound === 'mcq' && mcqQuestions.length > 0) {
       const selectedOption = currentAnswer;
-      
+
       if (!selectedOption) {
         addLog('error', 'Please select an answer before submitting');
         return;
       }
-      
+
       addLog('success', `Answer saved for Question ${currentQuestionIndex + 1}`);
-      
+
       // Move to next question or complete round
       if (currentQuestionIndex < totalQuestions - 1) {
         handleNext();
@@ -458,12 +503,12 @@ export default function Assessment() {
           setShowUnansweredWarning(true);
           return;
         }
-        
+
         // MCQ round completed - batch submit all answers
         await submitAllMCQAnswers();
         await completeCurrentRound();
         addLog('success', 'MCQ round completed! Moving to next round...');
-        
+
         // Move to next round immediately (evaluation happens in background)
         setTimeout(() => {
           moveToNextRound();
@@ -471,18 +516,18 @@ export default function Assessment() {
       }
       return;
     }
-    
+
     // Handle Psychometric submission - save answer and move to next
     if (currentRound === 'psychometric' && psychometricQuestions.length > 0) {
       const selectedAnswer = currentAnswer;
-      
+
       if (!selectedAnswer) {
         addLog('error', 'Please select an answer before submitting');
         return;
       }
-      
+
       addLog('success', `Answer saved for Question ${currentQuestionIndex + 1}`);
-      
+
       // Move to next question or complete round
       if (currentQuestionIndex < totalQuestions - 1) {
         handleNext();
@@ -502,12 +547,12 @@ export default function Assessment() {
           setShowUnansweredWarning(true);
           return;
         }
-        
+
         // Psychometric round completed - submit all answers
         await submitAllPsychometricAnswers();
         await completeCurrentRound();
         addLog('success', 'Psychometric assessment completed! Moving to next round...');
-        
+
         // Move to next round
         setTimeout(() => {
           moveToNextRound();
@@ -515,12 +560,12 @@ export default function Assessment() {
       }
       return;
     }
-    
+
     // Handle other question types
     if (currentQuestion.type === 'coding') {
       handleRunCode();
     }
-    
+
     // Move to next question or complete round
     if (currentQuestionIndex < totalQuestions - 1) {
       handleNext();
@@ -528,7 +573,7 @@ export default function Assessment() {
       // Round completed
       await completeCurrentRound();
       addLog('success', `${currentRoundConfig.name} completed!`);
-      
+
       // Show transition UI or automatically move to next round
       setTimeout(() => {
         moveToNextRound();
@@ -658,7 +703,7 @@ export default function Assessment() {
               const progress = roundProgress[round];
               const isActive = round === currentRound;
               const isCompleted = progress.status === 'completed';
-              
+
               return (
                 <div key={round} className="flex items-center gap-2">
                   <div className={`
@@ -795,8 +840,18 @@ export default function Assessment() {
         </span>
       </div>
 
-      {/* Webcam Monitor */}
-      <WebcamMonitor />
+      {/* Monitoring Panel - Left Side */}
+      <div className="fixed bottom-4 left-4 z-50 flex gap-3">
+        {/* Webcam Monitor */}
+        <WebcamMonitor
+          onFrameCapture={analyzeFrame}
+          status={proctorStatus}
+          className=""
+        />
+
+        {/* Activity Monitor */}
+        <ActivityMonitor className="w-64" />
+      </div>
 
       {/* Unanswered Questions Warning Dialog */}
       <AlertDialog open={showUnansweredWarning} onOpenChange={setShowUnansweredWarning}>
@@ -813,8 +868,8 @@ export default function Assessment() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Go Back</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { 
-              setShowUnansweredWarning(false); 
+            <AlertDialogAction onClick={() => {
+              setShowUnansweredWarning(false);
               if (pendingSubmitAction) {
                 pendingSubmitAction();
                 setPendingSubmitAction(null);

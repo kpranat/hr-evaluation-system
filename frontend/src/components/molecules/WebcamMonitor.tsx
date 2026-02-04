@@ -1,43 +1,98 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Video, Shield, AlertCircle, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface WebcamMonitorProps {
   className?: string;
+  onFrameCapture?: (base64Image: string) => void;
+  status?: 'active' | 'warning' | 'error' | 'idle';
 }
 
-type MonitoringStatus = 'active' | 'warning' | 'error';
+type MonitoringStatus = 'active' | 'warning' | 'error' | 'idle';
 
-export function WebcamMonitor({ className }: WebcamMonitorProps) {
+export function WebcamMonitor({ className, onFrameCapture, status: externalStatus }: WebcamMonitorProps) {
   const [isMinimized, setIsMinimized] = useState(false);
-  const [status, setStatus] = useState<MonitoringStatus>('active');
+  const [status, setStatus] = useState<MonitoringStatus>(externalStatus || 'active');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  // Simulate webcam permission check
+  // Initialize webcam stream
   useEffect(() => {
-    const checkPermission = async () => {
+    const startWebcam = async () => {
       try {
-        // Check if mediaDevices is available
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          // Just check permissions, don't actually stream
-          const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
-          setHasPermission(result.state === 'granted');
-          
-          result.addEventListener('change', () => {
-            setHasPermission(result.state === 'granted');
-          });
-        } else {
-          setHasPermission(false);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 }
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
         }
-      } catch {
-        // If permission API not available, assume we need to request
-        setHasPermission(null);
+        setHasPermission(true);
+        setStatus('active');
+      } catch (error) {
+        console.error('Failed to access webcam:', error);
+        setHasPermission(false);
+        setStatus('error');
       }
     };
 
-    checkPermission();
+    startWebcam();
+
+    return () => {
+      // Cleanup stream on unmount only
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    };
   }, []);
+
+  // Capture frames periodically and send for analysis
+  useEffect(() => {
+    if (!onFrameCapture || !hasPermission) return;
+
+    const captureFrame = () => {
+      const video = videoRef.current;
+      if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+      try {
+        // Create canvas to capture frame
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const base64Image = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+        onFrameCapture(base64Image);
+      } catch (error) {
+        console.error('Frame capture error:', error);
+      }
+    };
+
+    const captureInterval = setInterval(captureFrame, 10000); // Capture every 10 seconds
+
+    return () => clearInterval(captureInterval);
+  }, [onFrameCapture, hasPermission]);
+
+  // Update status when external status changes
+  useEffect(() => {
+    if (externalStatus) {
+      setStatus(externalStatus);
+    }
+  }, [externalStatus]);
+
+  // Ensure video plays when minimized state changes
+  useEffect(() => {
+    if (videoRef.current && streamRef.current && !isMinimized) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(e => console.error('Video play error:', e));
+    }
+  }, [isMinimized]);
 
   const statusConfig = {
     active: {
@@ -68,34 +123,28 @@ export function WebcamMonitor({ className }: WebcamMonitorProps) {
 
   if (isMinimized) {
     return (
-      <div
+      <Button
+        variant="secondary"
+        size="sm"
         className={cn(
-          "fixed bottom-4 left-4 z-50",
+          "gap-2 shadow-lg border",
+          currentStatus.bgColor,
+          currentStatus.borderColor,
           className
         )}
+        onClick={() => setIsMinimized(false)}
       >
-        <Button
-          variant="secondary"
-          size="sm"
-          className={cn(
-            "gap-2 shadow-lg border",
-            currentStatus.bgColor,
-            currentStatus.borderColor
-          )}
-          onClick={() => setIsMinimized(false)}
-        >
-          <div className={cn("w-2 h-2 rounded-full animate-pulse", status === 'active' ? 'bg-success' : status === 'warning' ? 'bg-warning' : 'bg-destructive')} />
-          <Video className="h-4 w-4" />
-          <span className="text-xs">Webcam</span>
-        </Button>
-      </div>
+        <div className={cn("w-2 h-2 rounded-full animate-pulse", status === 'active' ? 'bg-success' : status === 'warning' ? 'bg-warning' : 'bg-destructive')} />
+        <Video className="h-4 w-4" />
+        <span className="text-xs">Webcam</span>
+      </Button>
     );
   }
 
   return (
     <div
       className={cn(
-        "fixed bottom-4 left-4 z-50 w-64 rounded-lg overflow-hidden shadow-2xl border",
+        "w-64 rounded-lg overflow-hidden shadow-2xl border",
         "bg-card/95 backdrop-blur-xl",
         currentStatus.borderColor,
         className
@@ -128,12 +177,14 @@ export function WebcamMonitor({ className }: WebcamMonitorProps) {
           </div>
         ) : (
           <>
-            {/* Mock webcam view with gradient */}
-            <div className="absolute inset-0 bg-gradient-to-br from-muted/80 to-muted flex items-center justify-center">
-              <div className="w-16 h-16 rounded-full bg-muted-foreground/20 flex items-center justify-center">
-                <Video className="h-8 w-8 text-muted-foreground/50" />
-              </div>
-            </div>
+            {/* Actual webcam video stream */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="absolute inset-0 w-full h-full object-cover"
+            />
 
             {/* Recording indicator */}
             <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded bg-destructive/90 text-destructive-foreground">
