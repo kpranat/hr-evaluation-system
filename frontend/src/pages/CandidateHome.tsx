@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Brain, Shield, User } from 'lucide-react';
+import { ArrowRight, Brain, Shield, User, CheckSquare, Code, CheckCircle2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateApi } from '@/lib/api';
 import ResumeUpload from '@/components/molecules/ResumeUpload';
 import { Card, CardContent } from '@/components/ui/card';
+import { ROUND_CONFIGS, ROUND_ORDER } from '@/types/rounds';
 
 interface CandidateData {
   email: string;
@@ -104,18 +105,44 @@ export default function CandidateHome() {
                 </div>
                 
                 <p className="text-sm text-muted-foreground">
-                  Complete a personalized assessment tailored to your experience and 
-                  the role you're applying for. Make sure to upload your resume first.
+                  Complete a comprehensive assessment in three rounds. 
+                  Make sure to upload your resume first to begin.
                 </p>
 
-                <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-                  <h4 className="font-medium text-sm">Assessment Features:</h4>
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• Personalized coding problems</li>
-                    <li>• Real-time code evaluation</li>
-                    <li>• Webcam proctoring</li>
-                    <li>• Detailed feedback</li>
-                  </ul>
+                {/* Assessment Rounds Preview */}
+                <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+                  <h4 className="font-medium text-sm mb-3">Assessment Workflow:</h4>
+                  
+                  {ROUND_ORDER.map((roundId, idx) => {
+                    const config = ROUND_CONFIGS[roundId];
+                    const Icon = roundId === 'mcq' ? CheckSquare : roundId === 'psychometric' ? Brain : Code;
+                    
+                    return (
+                      <div key={roundId} className="flex items-start gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <span className="text-sm font-semibold text-primary">{idx + 1}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Icon className="h-4 w-4 text-muted-foreground" />
+                            <h5 className="font-medium text-sm">{config.name}</h5>
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {config.estimatedTime}min
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{config.description}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3 rounded-lg">
+                  <p className="text-xs text-blue-700 dark:text-blue-400">
+                    <strong>Note:</strong> You must complete each round in sequence: 
+                    MCQ → Psychometric → Technical
+                  </p>
                 </div>
 
                 <Button

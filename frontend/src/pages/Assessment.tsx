@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
-import { Clock, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Clock, AlertCircle, ChevronLeft, ChevronRight, CheckCircle2, Brain, Code, CheckSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ProblemViewer } from '@/components/molecules/ProblemViewer';
@@ -12,8 +12,11 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
-import { mockQuestions } from '@/lib/mock-data';
+import { questionsByRound } from '@/lib/mock-data';
 import { AssessmentQuestion } from '@/types/assessment';
+import { AssessmentRound, ROUND_CONFIGS, ROUND_ORDER, RoundProgress } from '@/types/rounds';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 
 interface ConsoleLog {
   type: 'log' | 'error' | 'info' | 'success';
@@ -21,20 +24,44 @@ interface ConsoleLog {
   timestamp: Date;
 }
 
+const ROUND_ICONS = {
+  mcq: CheckSquare,
+  psychometric: Brain,
+  technical: Code
+};
+
 export default function Assessment() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
-  // State
+  // Round Management State
+  const [currentRound, setCurrentRound] = useState<AssessmentRound>('mcq');
+  const [roundProgress, setRoundProgress] = useState<Record<AssessmentRound, RoundProgress>>({
+    mcq: { round: 'mcq', status: 'in-progress', answers: {}, currentQuestionIndex: 0 },
+    psychometric: { round: 'psychometric', status: 'not-started', answers: {} },
+    technical: { round: 'technical', status: 'not-started', answers: {} }
+  });
+
+  // Question State
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, any>>({});
   const [isRunning, setIsRunning] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
   const [consoleExpanded, setConsoleExpanded] = useState(false);
 
   // Derived State
-  const currentQuestion: AssessmentQuestion = mockQuestions[currentQuestionIndex];
-  const totalQuestions = mockQuestions.length;
-  const currentAnswer = answers[currentQuestion.id];
+  const currentRoundQuestions = questionsByRound[currentRound];
+  const currentQuestion: AssessmentQuestion = currentRoundQuestions[currentQuestionIndex];
+  const totalQuestions = currentRoundQuestions.length;
+  const currentAnswer = roundProgress[currentRound].answers[currentQuestion.id];
+  const currentRoundConfig = ROUND_CONFIGS[currentRound];
+
+  // Get overall progress
+  const overallProgress = (() => {
+    const completedRounds = ROUND_ORDER.filter(r => roundProgress[r].status === 'completed').length;
+    const currentRoundIdx = ROUND_ORDER.indexOf(currentRound);
+    const currentRoundProgress = (currentQuestionIndex / totalQuestions);
+    return ((completedRounds + currentRoundProgress) / ROUND_ORDER.length) * 100;
+  })();
 
   // Logic
   const addLog = useCallback((type: ConsoleLog['type'], message: string) => {
@@ -46,9 +73,16 @@ export default function Assessment() {
   }, []);
 
   const handleAnswerChange = (value: any) => {
-    setAnswers(prev => ({
+    setRoundProgress(prev => ({
       ...prev,
-      [currentQuestion.id]: value
+      [currentRound]: {
+        ...prev[currentRound],
+        answers: {
+          ...prev[currentRound].answers,
+          [currentQuestion.id]: value
+        },
+        currentQuestionIndex
+      }
     }));
   };
 
@@ -65,16 +99,58 @@ export default function Assessment() {
     setIsRunning(false);
   };
 
+  const completeCurrentRound = () => {
+    setRoundProgress(prev => ({
+      ...prev,
+      [currentRound]: {
+        ...prev[currentRound],
+        status: 'completed',
+        completedAt: new Date()
+      }
+    }));
+  };
+
+  const moveToNextRound = () => {
+    const currentIdx = ROUND_ORDER.indexOf(currentRound);
+    if (currentIdx < ROUND_ORDER.length - 1) {
+      const nextRound = ROUND_ORDER[currentIdx + 1];
+      setCurrentRound(nextRound);
+      setCurrentQuestionIndex(0);
+      setRoundProgress(prev => ({
+        ...prev,
+        [nextRound]: {
+          ...prev[nextRound],
+          status: 'in-progress',
+          startedAt: new Date()
+        }
+      }));
+      addLog('success', `Starting ${ROUND_CONFIGS[nextRound].name}...`);
+    } else {
+      // All rounds completed
+      addLog('success', 'Assessment completed! Submitting your responses...');
+      setTimeout(() => {
+        navigate('/candidate/home');
+      }, 2000);
+    }
+  };
+
   const handleSubmitQuestion = () => {
     if (currentQuestion.type === 'coding') {
       handleRunCode();
+    }
+    
+    // Move to next question or complete round
+    if (currentQuestionIndex < totalQuestions - 1) {
+      handleNext();
     } else {
-      // For non-coding questions, just move to next if available
-      if (currentQuestionIndex < totalQuestions - 1) {
-        handleNext();
-      } else {
-        addLog('success', 'Assessment completed! Answers saved.');
-      }
+      // Round completed
+      completeCurrentRound();
+      addLog('success', `${currentRoundConfig.name} completed!`);
+      
+      // Show transition UI or automatically move to next round
+      setTimeout(() => {
+        moveToNextRound();
+      }, 1500);
     }
   };
 
@@ -117,53 +193,103 @@ export default function Assessment() {
 
   return (
     <div className="flex-1 flex flex-col h-[calc(100vh-7rem)] animate-fade-in">
-      {/* Assessment Header */}
-      <div className="h-12 border-b border-border/50 bg-muted/20 flex items-center justify-between px-4 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="text-sm font-medium">Assessment Framework</h1>
-          <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
-            {currentQuestion.type.toUpperCase()}
-          </span>
+      {/* Assessment Header with Round Progress */}
+      <div className="border-b border-border/50 bg-muted/20 flex-shrink-0">
+        {/* Round Progress Indicators */}
+        <div className="h-14 flex items-center justify-between px-4 border-b border-border/30">
+          <div className="flex items-center gap-2">
+            {ROUND_ORDER.map((round, idx) => {
+              const RoundIcon = ROUND_ICONS[round];
+              const progress = roundProgress[round];
+              const isActive = round === currentRound;
+              const isCompleted = progress.status === 'completed';
+              
+              return (
+                <div key={round} className="flex items-center gap-2">
+                  <div className={`
+                    flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all
+                    ${isActive ? 'bg-primary text-primary-foreground border-primary' : ''}
+                    ${isCompleted ? 'bg-green-500/10 text-green-600 border-green-500/20' : ''}
+                    ${!isActive && !isCompleted ? 'bg-muted/50 text-muted-foreground border-border' : ''}
+                  `}>
+                    {isCompleted ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <RoundIcon className="h-4 w-4" />
+                    )}
+                    <span className="text-sm font-medium">
+                      {ROUND_CONFIGS[round].name}
+                    </span>
+                    {isActive && (
+                      <Badge variant="secondary" className="ml-1 text-xs">
+                        {currentQuestionIndex + 1}/{totalQuestions}
+                      </Badge>
+                    )}
+                  </div>
+                  {idx < ROUND_ORDER.length - 1 && (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Progress value={overallProgress} className="w-32 h-2" />
+            <span className="text-sm text-muted-foreground font-medium">
+              {Math.round(overallProgress)}%
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          {/* Timer */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-background border border-border">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="font-mono text-sm font-medium tabular-nums">45:00</span>
+        {/* Current Question Info */}
+        <div className="h-12 flex items-center justify-between px-4">
+          <div className="flex items-center gap-4">
+            <h1 className="text-sm font-medium">{currentRoundConfig.name}</h1>
+            <Badge variant="outline" className="text-xs">
+              {currentQuestion.type.toUpperCase()}
+            </Badge>
           </div>
 
-          {/* Progress */}
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">
-              Question {currentQuestionIndex + 1} of {totalQuestions}
-            </span>
-            <Progress
-              value={((currentQuestionIndex + 1) / totalQuestions) * 100}
-              className="w-24 h-2"
-            />
-          </div>
+          <div className="flex items-center gap-6">
+            {/* Timer */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-background border border-border">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="font-mono text-sm font-medium tabular-nums">45:00</span>
+            </div>
 
-          {/* Navigation */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handlePrevious}
-              disabled={currentQuestionIndex === 0}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleNext}
-              disabled={currentQuestionIndex === totalQuestions - 1}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            {/* Current Round Progress */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">
+                Question {currentQuestionIndex + 1} of {totalQuestions}
+              </span>
+              <Progress
+                value={((currentQuestionIndex + 1) / totalQuestions) * 100}
+                className="w-24 h-2"
+              />
+            </div>
+
+            {/* Navigation */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handlePrevious}
+                disabled={currentQuestionIndex === 0}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleNext}
+                disabled={currentQuestionIndex === totalQuestions - 1}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
