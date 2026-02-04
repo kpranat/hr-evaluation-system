@@ -8,6 +8,16 @@ import { AssessmentInput } from '@/components/molecules/AssessmentInput';
 import { ConsoleOutput } from '@/components/molecules/ConsoleOutput';
 import { WebcamMonitor } from '@/components/molecules/WebcamMonitor';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
@@ -60,6 +70,11 @@ export default function Assessment() {
   const [isRunning, setIsRunning] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
   const [consoleExpanded, setConsoleExpanded] = useState(false);
+
+  // Unanswered questions warning
+  const [showUnansweredWarning, setShowUnansweredWarning] = useState(false);
+  const [unansweredQuestionsList, setUnansweredQuestionsList] = useState<number[]>([]);
+  const [pendingSubmitAction, setPendingSubmitAction] = useState<(() => void) | null>(null);
 
   // Load MCQ questions when on MCQ round
   useEffect(() => {
@@ -428,6 +443,22 @@ export default function Assessment() {
       if (currentQuestionIndex < totalQuestions - 1) {
         handleNext();
       } else {
+        // Check for unanswered MCQ questions before completing
+        const unanswered = mcqQuestions.filter((_, idx) => !roundProgress.mcq.answers[idx]);
+        if (unanswered.length > 0) {
+          setUnansweredQuestionsList(unanswered.map((_, idx) => idx + 1));
+          setPendingSubmitAction(() => async () => {
+            await submitAllMCQAnswers();
+            await completeCurrentRound();
+            addLog('success', 'MCQ round completed! Moving to next round...');
+            setTimeout(() => {
+              moveToNextRound();
+            }, 500);
+          });
+          setShowUnansweredWarning(true);
+          return;
+        }
+        
         // MCQ round completed - batch submit all answers
         await submitAllMCQAnswers();
         await completeCurrentRound();
@@ -456,6 +487,22 @@ export default function Assessment() {
       if (currentQuestionIndex < totalQuestions - 1) {
         handleNext();
       } else {
+        // Check for unanswered Psychometric questions before completing
+        const unanswered = psychometricQuestions.filter((_, idx) => !roundProgress.psychometric.answers[idx]);
+        if (unanswered.length > 0) {
+          setUnansweredQuestionsList(unanswered.map((_, idx) => idx + 1));
+          setPendingSubmitAction(() => async () => {
+            await submitAllPsychometricAnswers();
+            await completeCurrentRound();
+            addLog('success', 'Psychometric assessment completed! Moving to next round...');
+            setTimeout(() => {
+              moveToNextRound();
+            }, 500);
+          });
+          setShowUnansweredWarning(true);
+          return;
+        }
+        
         // Psychometric round completed - submit all answers
         await submitAllPsychometricAnswers();
         await completeCurrentRound();
@@ -750,6 +797,34 @@ export default function Assessment() {
 
       {/* Webcam Monitor */}
       <WebcamMonitor />
+
+      {/* Unanswered Questions Warning Dialog */}
+      <AlertDialog open={showUnansweredWarning} onOpenChange={setShowUnansweredWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Submit Round?</AlertDialogTitle>
+            <AlertDialogDescription>
+              There might be some questions unattended in this round.
+              <br /><br />
+              After submission, this round will be <strong>locked</strong> and any unattended questions will be marked as <strong>null/not attempted</strong>.
+              <br /><br />
+              Are you sure you want to submit?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Go Back</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { 
+              setShowUnansweredWarning(false); 
+              if (pendingSubmitAction) {
+                pendingSubmitAction();
+                setPendingSubmitAction(null);
+              }
+            }}>
+              Submit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

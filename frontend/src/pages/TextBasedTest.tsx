@@ -5,6 +5,16 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle2, AlertCircle, FileText, Send, Save, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useNavigate } from 'react-router-dom';
 import {
   ResizableHandle,
@@ -48,6 +58,8 @@ export default function TextBasedTest() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [showUnansweredWarning, setShowUnansweredWarning] = useState(false);
+  const [unansweredQuestionsList, setUnansweredQuestionsList] = useState<number[]>([]);
 
   useEffect(() => {
     loadQuestions();
@@ -257,10 +269,15 @@ export default function TextBasedTest() {
     const unansweredQuestions = questions.filter(q => !submittedAnswers.has(q.question_id));
     
     if (unansweredQuestions.length > 0) {
-      setError(`Please answer all questions before completing the test. ${unansweredQuestions.length} question(s) remaining.`);
+      setUnansweredQuestionsList(unansweredQuestions.map(q => q.question_id));
+      setShowUnansweredWarning(true);
       return;
     }
 
+    await submitTest();
+  };
+
+  const submitTest = async () => {
     // Save current answer if it has changes
     if (currentAnswer.trim()) {
       const saved = await handleSaveAnswer(true);
@@ -533,7 +550,7 @@ export default function TextBasedTest() {
                     ) : (
                       <Button
                         onClick={handleCompleteTest}
-                        disabled={saving || isCompleting || answeredCount < questions.length}
+                        disabled={saving || isCompleting}
                         className="gap-2"
                       >
                         <Send className="h-4 w-4" />
@@ -555,6 +572,28 @@ export default function TextBasedTest() {
           Your answers are being auto-saved. Complete all {questions.length} questions to finish the assessment.
         </span>
       </div>
+
+      {/* Unanswered Questions Warning Dialog */}
+      <AlertDialog open={showUnansweredWarning} onOpenChange={setShowUnansweredWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Submit Assessment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              There might be some questions unattended.
+              <br /><br />
+              After submission, this round will be <strong>locked</strong> and any unattended questions will be marked as <strong>null/not attempted</strong>.
+              <br /><br />
+              Are you sure you want to submit?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Go Back</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowUnansweredWarning(false); submitTest(); }}>
+              Submit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
