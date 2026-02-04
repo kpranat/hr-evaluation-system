@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, AlertCircle, ChevronLeft, ChevronRight, CheckCircle2, Brain, Code, CheckSquare } from 'lucide-react';
+import { Clock, AlertCircle, ChevronLeft, ChevronRight, CheckCircle2, Brain, Code, CheckSquare, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ProblemViewer } from '@/components/molecules/ProblemViewer';
@@ -28,7 +28,8 @@ interface ConsoleLog {
 const ROUND_ICONS = {
   mcq: CheckSquare,
   psychometric: Brain,
-  technical: Code
+  technical: Code,
+  'text-based': FileText
 };
 
 export default function Assessment() {
@@ -40,7 +41,8 @@ export default function Assessment() {
   const [roundProgress, setRoundProgress] = useState<Record<AssessmentRound, RoundProgress>>({
     mcq: { round: 'mcq', status: 'in-progress', answers: {}, currentQuestionIndex: 0 },
     psychometric: { round: 'psychometric', status: 'not-started', answers: {} },
-    technical: { round: 'technical', status: 'not-started', answers: {} }
+    technical: { round: 'technical', status: 'not-started', answers: {} },
+    'text-based': { round: 'text-based', status: 'not-started', answers: {} }
   });
   const [loading, setLoading] = useState(true);
 
@@ -207,8 +209,19 @@ export default function Assessment() {
         
         if (candidateData.technical_completed) {
           updatedProgress.technical.status = 'completed';
+          activeRound = 'text-based';
+        }
+        
+        if (candidateData.text_based_completed) {
+          updatedProgress['text-based'].status = 'completed';
           // All rounds completed, redirect to home
-          navigate('/candidate/home');
+          navigate('/candidate');
+          return;
+        }
+        
+        // If text-based is the active round, redirect to dedicated text-based test page
+        if (activeRound === 'text-based') {
+          navigate('/candidate/text-based-test');
           return;
         }
         
@@ -369,6 +382,16 @@ export default function Assessment() {
     const currentIdx = ROUND_ORDER.indexOf(currentRound);
     if (currentIdx < ROUND_ORDER.length - 1) {
       const nextRound = ROUND_ORDER[currentIdx + 1];
+      
+      // If next round is text-based, redirect to dedicated page
+      if (nextRound === 'text-based') {
+        addLog('success', 'Moving to Text-Based Assessment...');
+        setTimeout(() => {
+          navigate('/candidate/text-based-test');
+        }, 1500);
+        return;
+      }
+      
       setCurrentRound(nextRound);
       setCurrentQuestionIndex(0);
       setRoundProgress(prev => ({
@@ -384,7 +407,7 @@ export default function Assessment() {
       // All rounds completed
       addLog('success', 'Assessment completed! Submitting your responses...');
       setTimeout(() => {
-        navigate('/candidate/home');
+        navigate('/candidate');
       }, 2000);
     }
   };

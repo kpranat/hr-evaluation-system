@@ -6,10 +6,12 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { useState } from 'react';
 import MCQUploadDialog from '@/components/molecules/MCQUploadDialog';
+import TextBasedUploadDialog from '@/components/molecules/TextBasedUploadDialog';
 import { Upload } from 'lucide-react';
 
 export default function Settings() {
   const [mcqDialogOpen, setMcqDialogOpen] = useState(false);
+  const [textBasedDialogOpen, setTextBasedDialogOpen] = useState(false);
 
   return (
     <div className="space-y-6 animate-fade-in max-w-2xl">
@@ -72,6 +74,33 @@ export default function Settings() {
         </div>
       </Card>
 
+      {/* Text-Based Question Management */}
+      <Card className="p-6 space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold">Text-Based Question Bank</h2>
+          <p className="text-sm text-muted-foreground">
+            Upload and manage open-ended questions for text-based assessments.
+          </p>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Bulk Upload Questions</Label>
+              <p className="text-sm text-muted-foreground">
+                Upload text-based questions from CSV or Excel file (max 200 words per answer)
+              </p>
+            </div>
+            <Button onClick={() => setTextBasedDialogOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Questions
+            </Button>
+          </div>
+        </div>
+      </Card>
+
       {/* Assessment Settings */}
       <Card className="p-6 space-y-6">
         <div>
@@ -122,6 +151,15 @@ export default function Settings() {
           <h2 className="text-lg font-semibold">API Configuration</h2>
           <p className="text-sm text-muted-foreground">
             Backend integration settings.
+
+      {/* Text-Based Upload Dialog */}
+      <TextBasedUploadDialog
+        open={textBasedDialogOpen}
+        onOpenChange={setTextBasedDialogOpen}
+        onUploadComplete={() => {
+          console.log('Text-based questions upload completed');
+        }}
+      />
           </p>
         </div>
 

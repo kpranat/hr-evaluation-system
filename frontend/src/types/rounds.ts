@@ -1,4 +1,4 @@
-export type AssessmentRound = 'mcq' | 'psychometric' | 'technical';
+export type AssessmentRound = 'mcq' | 'psychometric' | 'technical' | 'text-based';
 
 export interface RoundConfig {
   id: AssessmentRound;
@@ -49,7 +49,15 @@ export const ROUND_CONFIGS: Record<AssessmentRound, RoundConfig> = {
     icon: 'Code',
     estimatedTime: 45,
     order: 3
+  },
+  'text-based': {
+    id: 'text-based',
+    name: 'Text-Based Questions',
+    description: 'Answer open-ended questions to evaluate your communication and thought process',
+    icon: 'FileText',
+    estimatedTime: 30,
+    order: 4
   }
 };
 
-export const ROUND_ORDER: AssessmentRound[] = ['mcq', 'psychometric', 'technical'];
+export const ROUND_ORDER: AssessmentRound[] = ['mcq', 'psychometric', 'technical', 'text-based'];

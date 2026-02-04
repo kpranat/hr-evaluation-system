@@ -50,6 +50,10 @@ def create_app():
     # Psychometric assessment routes
     from .Psychometric import psychometric_bp
     app.register_blueprint(psychometric_bp, url_prefix='/api/psychometric')
+    
+    # Text-based assessment routes
+    from .TextBased import TextBased
+    app.register_blueprint(TextBased, url_prefix='/api/text-based')
 
     # Import models before creating tables
     from . import models
@@ -103,6 +107,14 @@ def create_app():
             if 'technical_completed_at' not in existing_columns:
                 db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN technical_completed_at TIMESTAMP"))
                 print("✅ Added technical_completed_at column to candidate_auth")
+            
+            if 'text_based_completed' not in existing_columns:
+                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN text_based_completed BOOLEAN DEFAULT FALSE NOT NULL"))
+                print("✅ Added text_based_completed column to candidate_auth")
+            
+            if 'text_based_completed_at' not in existing_columns:
+                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN text_based_completed_at TIMESTAMP"))
+                print("✅ Added text_based_completed_at column to candidate_auth")
             
             db.session.commit()
 

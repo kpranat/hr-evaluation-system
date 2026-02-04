@@ -16,6 +16,7 @@ import CandidateLogin from "@/pages/CandidateLogin";
 import Assessment from "@/pages/Assessment";
 import MCQTest from "@/pages/MCQTest";
 import PsychometricTest from "@/pages/PsychometricTest";
+import TextBasedTest from "@/pages/TextBasedTest";
 
 // Recruiter Pages
 import RecruiterLogin from "@/pages/RecruiterLogin";
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/candidate" element={<CandidateHome />} />
               <Route path="/candidate/mcq-test" element={<MCQTest />} />
               <Route path="/candidate/psychometric-test" element={<PsychometricTest />} />
+              <Route path="/candidate/text-based-test" element={<TextBasedTest />} />
               <Route path="/assessment/:id" element={<Assessment />} />
             </Route>
 

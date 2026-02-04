@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Brain, Shield, User, CheckSquare, Code, CheckCircle2, Clock } from 'lucide-react';
+import { ArrowRight, Brain, Shield, User, CheckSquare, Code, CheckCircle2, Clock, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateApi } from '@/lib/api';
 import ResumeUpload from '@/components/molecules/ResumeUpload';
@@ -18,6 +18,8 @@ interface CandidateData {
   psychometric_completed_at?: string;
   technical_completed?: boolean;
   technical_completed_at?: string;
+  text_based_completed?: boolean;
+  text_based_completed_at?: string;
 }
 
 export default function CandidateHome() {
@@ -53,7 +55,7 @@ export default function CandidateHome() {
     }
     
     // Check if all rounds are completed
-    if (candidateData.mcq_completed && candidateData.psychometric_completed && candidateData.technical_completed) {
+    if (candidateData.mcq_completed && candidateData.psychometric_completed && candidateData.technical_completed && candidateData.text_based_completed) {
       alert('You have already completed all assessment rounds!');
       return;
     }
@@ -127,9 +129,12 @@ export default function CandidateHome() {
                   
                   {ROUND_ORDER.map((roundId, idx) => {
                     const config = ROUND_CONFIGS[roundId];
-                    const Icon = roundId === 'mcq' ? CheckSquare : roundId === 'psychometric' ? Brain : Code;
+                    const Icon = roundId === 'mcq' ? CheckSquare : 
+                                 roundId === 'psychometric' ? Brain : 
+                                 roundId === 'text-based' ? FileText : Code;
                     const isCompleted = roundId === 'mcq' ? candidateData?.mcq_completed : 
                                        roundId === 'psychometric' ? candidateData?.psychometric_completed :
+                                       roundId === 'text-based' ? candidateData?.text_based_completed :
                                        candidateData?.technical_completed;
                     
                     return (
@@ -165,7 +170,7 @@ export default function CandidateHome() {
                   })}
                 </div>
 
-                {candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed ? (
+                {candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed && candidateData?.text_based_completed ? (
                   <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-3 rounded-lg">
                     <p className="text-sm text-green-700 dark:text-green-400 font-medium">
                       ✓ All assessment rounds completed! Our team will review your responses and get back to you soon.
@@ -175,7 +180,7 @@ export default function CandidateHome() {
                   <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3 rounded-lg">
                     <p className="text-xs text-blue-700 dark:text-blue-400">
                       <strong>Note:</strong> You must complete each round in sequence: 
-                      MCQ → Psychometric → Technical. Once completed, a round cannot be retaken.
+                      MCQ → Psychometric → Technical → Text-Based. Once completed, a round cannot be retaken.
                     </p>
                   </div>
                 )}
@@ -183,15 +188,15 @@ export default function CandidateHome() {
                 <Button
                   size="lg"
                   className="w-full gap-2"
-                  disabled={!candidateData?.resume_url || (candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed)}
+                  disabled={!candidateData?.resume_url || (candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed && candidateData?.text_based_completed)}
                   onClick={handleStartAssessment}
                 >
-                  {candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed 
+                  {candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed && candidateData?.text_based_completed 
                     ? 'Assessment Completed' 
                     : candidateData?.mcq_completed 
                     ? 'Continue Assessment'
                     : 'Start Assessment'}
-                  {!(candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed) && (
+                  {!(candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed && candidateData?.text_based_completed) && (
                     <ArrowRight className="h-4 w-4" />
                   )}
                 </Button>

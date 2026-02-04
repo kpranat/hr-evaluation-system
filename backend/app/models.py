@@ -20,6 +20,8 @@ class CandidateAuth(db.Model):
     psychometric_completed_at = db.Column(db.DateTime, nullable=True)
     technical_completed = db.Column(db.Boolean, default=False, nullable=False)
     technical_completed_at = db.Column(db.DateTime, nullable=True)
+    text_based_completed = db.Column(db.Boolean, default=False, nullable=False)
+    text_based_completed_at = db.Column(db.DateTime, nullable=True)
     
     def set_password(self, password):
         """Hash and set the password"""
@@ -42,7 +44,9 @@ class CandidateAuth(db.Model):
             'psychometric_completed': self.psychometric_completed,
             'psychometric_completed_at': self.psychometric_completed_at.isoformat() if self.psychometric_completed_at else None,
             'technical_completed': self.technical_completed,
-            'technical_completed_at': self.technical_completed_at.isoformat() if self.technical_completed_at else None
+            'technical_completed_at': self.technical_completed_at.isoformat() if self.technical_completed_at else None,
+            'text_based_completed': self.text_based_completed,
+            'text_based_completed_at': self.text_based_completed_at.isoformat() if self.text_based_completed_at else None
         }
 
 #====================== recruiter login ============================
@@ -216,5 +220,56 @@ class PsychometricResult(db.Model):
             'questions_answered': self.questions_answered,
             'test_completed': self.test_completed,
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
+        }
+
+#====================== Text-Based Questions ============================
+class TextBasedQuestion(db.Model):
+    __tablename__ = 'text_based_questions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    question_id = db.Column(db.Integer, unique=True, nullable=False)  # Unique question identifier
+    question = db.Column(db.Text, nullable=False)  # Question text
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'question_id': self.question_id,
+            'question': self.question,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+#====================== Text-Based Answers ============================
+class TextBasedAnswer(db.Model):
+    __tablename__ = 'text_based_answers'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('candidate_auth.id'), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('text_based_questions.question_id'), nullable=False)
+    answer = db.Column(db.Text, nullable=False)  # The candidate's answer text
+    word_count = db.Column(db.Integer, nullable=False)  # Word count of the answer
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    candidate = db.relationship('CandidateAuth', backref=db.backref('text_based_answers'))
+    question = db.relationship('TextBasedQuestion', backref=db.backref('answers'))
+    
+    # Unique constraint: one answer per student per question
+    __table_args__ = (db.UniqueConstraint('student_id', 'question_id', name='_student_question_uc'),)
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'student_id': self.student_id,
+            'question_id': self.question_id,
+            'answer': self.answer,
+            'word_count': self.word_count,
+            'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
