@@ -39,7 +39,11 @@ export default function TextBasedTest() {
   const [submittedAnswers, setSubmittedAnswers] = useState<Map<number, TextBasedAnswer>>(new Map());
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    // Check if data is preloaded - if so, start without loading screen
+    const hasPreloaded = localStorage.getItem('preloaded_text_based_questions');
+    return !hasPreloaded;
+  });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -61,6 +65,22 @@ export default function TextBasedTest() {
 
   const loadQuestions = async () => {
     try {
+      // Check if questions were preloaded
+      const preloadedQuestions = localStorage.getItem('preloaded_text_based_questions');
+      
+      if (preloadedQuestions) {
+        console.log('⚡ Using preloaded text-based questions');
+        const parsedQuestions = JSON.parse(preloadedQuestions);
+        setQuestions(parsedQuestions);
+        // Clear preloaded data after use
+        localStorage.removeItem('preloaded_text_based_questions');
+        // No need to set loading to false - initial state is already false when preloaded
+        return;
+      }
+
+      // Fallback to normal loading if not preloaded
+      console.log('📥 Fetching text-based questions...');
+      setLoading(true);
       const token = localStorage.getItem('candidate_token');
       const response = await fetch('http://localhost:5000/api/text-based/questions', {
         headers: {
@@ -85,6 +105,30 @@ export default function TextBasedTest() {
 
   const loadExistingAnswers = async () => {
     try {
+      // Check if answers were preloaded
+      const preloadedAnswers = localStorage.getItem('preloaded_text_based_answers');
+      
+      if (preloadedAnswers) {
+        console.log('⚡ Using preloaded text-based answers');
+        const parsedAnswers = JSON.parse(preloadedAnswers);
+        
+        const answerMap = new Map<number, string>();
+        const submittedMap = new Map<number, TextBasedAnswer>();
+        
+        parsedAnswers.forEach((ans: TextBasedAnswer) => {
+          answerMap.set(ans.question_id, ans.answer);
+          submittedMap.set(ans.question_id, ans);
+        });
+        
+        setAnswers(answerMap);
+        setSubmittedAnswers(submittedMap);
+        // Clear preloaded data after use
+        localStorage.removeItem('preloaded_text_based_answers');
+        return;
+      }
+
+      // Fallback to normal loading if not preloaded
+      console.log('📥 Fetching text-based answers...');
       const token = localStorage.getItem('candidate_token');
       const response = await fetch('http://localhost:5000/api/text-based/answers', {
         headers: {

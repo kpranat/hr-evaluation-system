@@ -43,7 +43,49 @@ export default function MCQTest() {
   useEffect(() => {
     loadQuestions();
     loadResult();
+    preloadTextBasedQuestions();
   }, []);
+
+  const preloadTextBasedQuestions = async () => {
+    try {
+      console.log('🔄 Preloading text-based questions in background...');
+      const token = localStorage.getItem('candidate_token');
+      
+      // Preload questions
+      const questionsResponse = await fetch('http://localhost:5000/api/text-based/questions', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (questionsResponse.ok) {
+        const questionsData = await questionsResponse.json();
+        if (questionsData.success && questionsData.questions) {
+          // Store in localStorage for quick access
+          localStorage.setItem('preloaded_text_based_questions', JSON.stringify(questionsData.questions));
+          console.log(`✅ Preloaded ${questionsData.questions.length} text-based questions`);
+        }
+      }
+
+      // Preload existing answers
+      const answersResponse = await fetch('http://localhost:5000/api/text-based/answers', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (answersResponse.ok) {
+        const answersData = await answersResponse.json();
+        if (answersData.success && answersData.answers) {
+          localStorage.setItem('preloaded_text_based_answers', JSON.stringify(answersData.answers));
+          console.log(`✅ Preloaded ${answersData.answers.length} text-based answers`);
+        }
+      }
+    } catch (err) {
+      console.error('⚠️ Failed to preload text-based questions (non-critical):', err);
+      // Don't show error to user, this is background preloading
+    }
+  };
 
   const loadQuestions = async () => {
     try {
