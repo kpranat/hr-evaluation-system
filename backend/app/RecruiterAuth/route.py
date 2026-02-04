@@ -8,6 +8,7 @@ from . import RecruiterAuth
 from ..models import RecruiterAuth as RecruiterAuthModel
 from ..extensions import db
 from ..config import Config
+from ..auth_helpers import verify_recruiter_token
 import jwt
 from datetime import datetime, timedelta
 

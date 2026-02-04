@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { recruiterApi } from '@/lib/api';
 
 export default function RecruiterLogin() {
   const navigate = useNavigate();
@@ -20,17 +21,10 @@ export default function RecruiterLogin() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/recruiter/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const result = await recruiterApi.login(email, password);
 
-      const data = await response.json();
-
-      if (response.ok && data.success) {
+      if (result.data && (result.data as any).success) {
+        const data = result.data as any;
         // Store token and user data
         localStorage.setItem('recruiter_token', data.token);
         localStorage.setItem('recruiter_user', JSON.stringify(data.user));
@@ -38,7 +32,7 @@ export default function RecruiterLogin() {
         // Navigate to dashboard
         navigate('/admin/dashboard');
       } else {
-        setError(data.message || 'Login failed');
+        setError((result.data as any)?.message || result.error || 'Login failed');
       }
     } catch (err) {
       setError('An error occurred. Please try again.');

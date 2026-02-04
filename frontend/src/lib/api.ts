@@ -15,12 +15,29 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
+    // Get token from localStorage (try both candidate and recruiter tokens)
+    const candidateToken = localStorage.getItem('candidate_token');
+    const recruiterToken = localStorage.getItem('recruiter_token');
+    const token = candidateToken || recruiterToken;
+
+    // Build headers with authentication if token exists
+    const headers: HeadersInit = {
+      ...options.headers,
+    };
+
+    // Only set Content-Type for JSON requests (not FormData)
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    // Add Authorization header if token exists and not already provided
+    if (token && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -83,6 +100,25 @@ export const candidateApi = {
     return request(`/api/assessments/${assessmentId}/submit`, {
       method: 'POST',
       body: JSON.stringify(answers),
+    });
+  },
+};
+
+// ============ Recruiter Endpoints ============
+
+export const recruiterApi = {
+  /** Login recruiter */
+  login: async (email: string, password: string) => {
+    return request('/api/recruiter/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  /** Verify JWT token */
+  verifyToken: async () => {
+    return request('/api/recruiter/verify', {
+      method: 'GET',
     });
   },
 };
@@ -218,10 +254,11 @@ export const psychometricApi = {
 
   /** Set test configuration (recruiter) */
   setConfig: async (recruiterId: number, numQuestions: number, selectionMode: 'random' | 'manual', selectedQuestionIds?: number[]) => {
+    // recruiterId parameter kept for backwards compatibility but not sent to backend
+    // Backend extracts recruiter_id from JWT token
     return request('/api/psychometric/config/set', {
       method: 'POST',
       body: JSON.stringify({
-        recruiter_id: recruiterId,
         num_questions: numQuestions,
         selection_mode: selectionMode,
         selected_question_ids: selectedQuestionIds,
@@ -231,25 +268,30 @@ export const psychometricApi = {
 
   /** Get current test configuration */
   getCurrentConfig: async (recruiterId: number) => {
-    return request(`/api/psychometric/config/current?recruiter_id=${recruiterId}`, {
+    // recruiterId parameter kept for backwards compatibility but not sent to backend
+    // Backend extracts recruiter_id from JWT token
+    return request('/api/psychometric/config/current', {
       method: 'GET',
     });
   },
 
   /** Start psychometric test (candidate) */
   startTest: async (candidateId: number) => {
+    // candidateId parameter kept for backwards compatibility but not sent to backend
+    // Backend extracts candidate_id from JWT token
     return request('/api/psychometric/test/start', {
       method: 'POST',
-      body: JSON.stringify({ candidate_id: candidateId }),
+      body: JSON.stringify({}),
     });
   },
 
   /** Submit psychometric test answers */
   submitTest: async (candidateId: number, answers: { question_id: number; answer: number }[]) => {
+    // candidateId parameter kept for backwards compatibility but not sent to backend
+    // Backend extracts candidate_id from JWT token
     return request('/api/psychometric/test/submit', {
       method: 'POST',
       body: JSON.stringify({
-        candidate_id: candidateId,
         answers: answers,
       }),
     });
@@ -265,6 +307,7 @@ export const psychometricApi = {
 
 export default {
   candidate: candidateApi,
+  recruiter: recruiterApi,
   admin: adminApi,
   mcq: mcqApi,
   psychometric: psychometricApi,

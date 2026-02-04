@@ -8,41 +8,10 @@ from . import RecruiterDashboard
 from ..models import CandidateAuth, MCQQuestion
 from ..extensions import db
 from ..config import Config
+from ..auth_helpers import verify_recruiter_token
 import jwt
 import pandas as pd
 import io
-
-
-def verify_recruiter_token(request):
-    """
-    Helper function to verify recruiter JWT token
-    
-    Args:
-        request: Flask request object containing Authorization header
-        
-    Returns:
-        tuple: (success: bool, payload: dict or error_message: str, status_code: int)
-    """
-    auth_header = request.headers.get('Authorization')
-    
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return False, 'Authentication required', 401
-    
-    token = auth_header.split(' ')[1]
-    
-    try:
-        payload = jwt.decode(token, Config.JWT_SECRET, algorithms=['HS256'])
-        
-        # Verify it's a recruiter token
-        if payload.get('type') != 'recruiter':
-            return False, 'Unauthorized: Recruiter access required', 403
-            
-        return True, payload, 200
-        
-    except jwt.ExpiredSignatureError:
-        return False, 'Token has expired', 401
-    except jwt.InvalidTokenError:
-        return False, 'Invalid token', 401
 
 
 @RecruiterDashboard.route('/candidates/upload', methods=['POST'])
@@ -100,17 +69,12 @@ def upload_candidates():
         - Uses pbkdf2:sha256 algorithm
         - No plain text passwords are stored
     """
+    # Verify recruiter authentication
+    recruiter_id, error = verify_recruiter_token()
+    if error:
+        return error
+    
     try:
-        # Verify recruiter authentication
-        is_valid, payload_or_error, status_code = verify_recruiter_token(request)
-        
-        if not is_valid:
-            return jsonify({
-                'success': False,
-                'message': payload_or_error
-            }), status_code
-        
-        # Check if file is present in request
         if 'file' not in request.files:
             return jsonify({
                 'success': False,
@@ -241,17 +205,12 @@ def upload_mcq_questions():
     
     Authentication: Required (JWT Bearer token - recruiter only)
     """
+    # Verify recruiter authentication
+    recruiter_id, error = verify_recruiter_token()
+    if error:
+        return error
+    
     try:
-        # Verify recruiter authentication
-        is_valid, payload_or_error, status_code = verify_recruiter_token(request)
-        
-        if not is_valid:
-            return jsonify({
-                'success': False,
-                'message': payload_or_error
-            }), status_code
-        
-        # Check if file is present
         if 'file' not in request.files:
             return jsonify({
                 'success': False,

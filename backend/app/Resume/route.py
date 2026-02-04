@@ -8,48 +8,11 @@ from . import Resume
 from ..models import CandidateAuth as CandidateAuthModel
 from ..extensions import db
 from ..config import Config
+from ..auth_helpers import verify_candidate_token
 import jwt
 from datetime import datetime
 from supabase import create_client, Client
 import os
-
-
-def verify_candidate_token():
-    """
-    Helper function to verify candidate JWT token
-    
-    Returns:
-        tuple: (candidate_id, error_response)
-        - If valid: (candidate_id, None)
-        - If invalid: (None, error_response)
-    """
-    auth_header = request.headers.get('Authorization')
-    
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return None, jsonify({
-            'success': False,
-            'message': 'Authentication required'
-        }), 401
-    
-    token = auth_header.split(' ')[1]
-    
-    try:
-        payload = jwt.decode(token, Config.JWT_SECRET, algorithms=['HS256'])
-        
-        # Verify it's a candidate token
-        if payload.get('type') != 'candidate':
-            return None, jsonify({
-                'success': False,
-                'message': 'Unauthorized: Candidate access required'
-            }), 401
-        
-        return payload.get('user_id'), None
-        
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        return None, jsonify({
-            'success': False,
-            'message': 'Invalid or expired token'
-        }), 401
 
 
 @Resume.route('/upload', methods=['POST'])

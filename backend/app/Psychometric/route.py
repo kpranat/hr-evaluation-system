@@ -1,6 +1,7 @@
 from flask import request, jsonify
 from app.extensions import db
 from app.models import PsychometricQuestion, PsychometricTestConfig, PsychometricResult, CandidateAuth
+from app.auth_helpers import verify_candidate_token, verify_recruiter_token
 from . import psychometric_bp
 from datetime import datetime
 import json
@@ -20,6 +21,11 @@ TRAIT_NAMES = {
 @psychometric_bp.route('/load-questions', methods=['POST'])
 def load_questions():
     """Load all 50 IPIP Big Five questions into database (one-time setup)"""
+    # Verify recruiter authentication
+    recruiter_id, error = verify_recruiter_token()
+    if error:
+        return error
+    
     try:
         # Check if questions already exist
         existing_count = PsychometricQuestion.query.count()
@@ -112,6 +118,11 @@ def load_questions():
 @psychometric_bp.route('/questions/all', methods=['GET'])
 def get_all_questions():
     """Get all psychometric questions (for recruiter to view/select)"""
+    # Verify recruiter authentication
+    recruiter_id, error = verify_recruiter_token()
+    if error:
+        return error
+    
     try:
         questions = PsychometricQuestion.query.order_by(PsychometricQuestion.question_id).all()
         
@@ -139,18 +150,18 @@ def get_all_questions():
 @psychometric_bp.route('/config/set', methods=['POST'])
 def set_test_configuration():
     """Recruiter sets psychometric test configuration"""
+    # Verify recruiter authentication
+    recruiter_id, error = verify_recruiter_token()
+    if error:
+        return error
+    
     try:
         data = request.get_json()
-        recruiter_id = data.get('recruiter_id')
+        # Use authenticated recruiter_id from token instead of request body
+        # recruiter_id = data.get('recruiter_id')  # No longer needed
         num_questions = data.get('num_questions', 50)
         selection_mode = data.get('selection_mode', 'random')  # 'random' or 'manual'
         selected_question_ids = data.get('selected_question_ids')  # Array of IDs for manual mode
-        
-        if not recruiter_id:
-            return jsonify({
-                'success': False,
-                'error': 'recruiter_id is required'
-            }), 400
         
         # Validate number of questions
         if num_questions < 15:
@@ -211,15 +222,13 @@ def set_test_configuration():
 @psychometric_bp.route('/config/current', methods=['GET'])
 def get_current_configuration():
     """Get current active test configuration"""
+    # Verify recruiter authentication
+    recruiter_id, error = verify_recruiter_token()
+    if error:
+        return error
+    
     try:
-        recruiter_id = request.args.get('recruiter_id')
-        
-        if not recruiter_id:
-            return jsonify({
-                'success': False,
-                'error': 'recruiter_id is required'
-            }), 400
-        
+        # Use authenticated recruiter_id from token
         config = PsychometricTestConfig.query.filter_by(
             recruiter_id=recruiter_id,
             is_active=True
@@ -247,16 +256,13 @@ def get_current_configuration():
 @psychometric_bp.route('/test/start', methods=['POST'])
 def start_test():
     """Get questions for candidate to take test"""
+    # Verify candidate authentication
+    candidate_id, error = verify_candidate_token()
+    if error:
+        return error
+    
     try:
-        data = request.get_json()
-        candidate_id = data.get('candidate_id')
-        
-        if not candidate_id:
-            return jsonify({
-                'success': False,
-                'error': 'candidate_id is required'
-            }), 400
-        
+        # Use authenticated candidate_id from token
         # Get active configuration (use most recent if multiple exist)
         config = PsychometricTestConfig.query.filter_by(is_active=True).order_by(
             PsychometricTestConfig.created_at.desc()
@@ -316,20 +322,25 @@ Indicate for each statement which answer best fits as a description of you:
 @psychometric_bp.route('/test/submit', methods=['POST'])
 def submit_test():
     """Submit psychometric test answers and calculate Big Five scores"""
+    # Verify candidate authentication
+    candidate_id, error = verify_candidate_token()
+    if error:
+        return error
+    
     try:
         data = request.get_json()
-        candidate_id = data.get('candidate_id')
+        # Use authenticated candidate_id from token
         answers = data.get('answers')  # Array of {question_id, answer (1-5)}
         
         print(f"\n📤 Psychometric test submission received")
         print(f"👤 Candidate ID: {candidate_id}")
         print(f"📝 Total answers: {len(answers) if answers else 0}")
         
-        if not candidate_id or not answers:
-            print(f"❌ Validation failed - candidate_id: {candidate_id}, answers: {bool(answers)}")
+        if not answers:
+            print(f"❌ Validation failed - answers: {bool(answers)}")
             return jsonify({
                 'success': False,
-                'error': 'candidate_id and answers are required'
+                'error': 'answers are required'
             }), 400
         
         # Initialize trait scores
@@ -424,6 +435,11 @@ def submit_test():
 @psychometric_bp.route('/results/<int:candidate_id>', methods=['GET'])
 def get_candidate_results(candidate_id):
     """Get psychometric test results for a candidate"""
+    # Verify recruiter authentication (only recruiters can view results)
+    recruiter_id, error = verify_recruiter_token()
+    if error:
+        return error
+    
     try:
         result = PsychometricResult.query.filter_by(student_id=candidate_id).first()
         
