@@ -44,11 +44,62 @@ export default function Assessment() {
   });
   const [loading, setLoading] = useState(true);
 
+  // MCQ specific state - real questions from API
+  const [mcqQuestions, setMcqQuestions] = useState<any[]>([]);
+  const [mcqSubmitting, setMcqSubmitting] = useState(false);
+
+  // Prefetch psychometric questions (load in background)
+  const [psychometricQuestionsReady, setPsychometricQuestionsReady] = useState(false);
+
   // Question State
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
   const [consoleExpanded, setConsoleExpanded] = useState(false);
+
+  // Load MCQ questions when on MCQ round
+  useEffect(() => {
+    if (currentRound === 'mcq' && mcqQuestions.length === 0) {
+      loadMCQQuestions();
+    }
+  }, [currentRound]);
+
+  const loadMCQQuestions = async () => {
+    try {
+      console.log('📥 Loading MCQ questions from API...');
+      const response = await mcqApi.getQuestions();
+      
+      if (response.error) {
+        console.error('❌ Error loading MCQ questions:', response.error);
+        addLog('error', `Failed to load MCQ questions: ${response.error}`);
+        return;
+      }
+      
+      if (response.data?.questions && response.data.questions.length > 0) {
+        console.log(`✅ Loaded ${response.data.questions.length} MCQ questions`);
+        setMcqQuestions(response.data.questions);
+        addLog('success', `Loaded ${response.data.questions.length} MCQ questions`);
+        
+        // Prefetch psychometric questions in background
+        prefetchPsychometricQuestions();
+      } else {
+        console.warn('⚠️ No MCQ questions available');
+        addLog('error', 'No MCQ questions available. Please contact administrator.');
+      }
+    } catch (error) {
+      console.error('❌ Exception loading MCQ questions:', error);
+      addLog('error', 'Failed to load MCQ questions');
+    }
+  };
+
+  const prefetchPsychometricQuestions = async () => {
+    // Simulate prefetching (you can add actual API call here later)
+    console.log('🔄 Prefetching psychometric questions in background...');
+    setTimeout(() => {
+      setPsychometricQuestionsReady(true);
+      console.log('✅ Psychometric questions ready');
+    }, 1000);
+  };
 
   // Check candidate status and round completion on mount
   useEffect(() => {
@@ -97,10 +148,12 @@ export default function Assessment() {
   }, [navigate]);
 
   // Derived State
-  const currentRoundQuestions = questionsByRound[currentRound];
-  const currentQuestion: AssessmentQuestion = currentRoundQuestions[currentQuestionIndex];
+  const currentRoundQuestions = currentRound === 'mcq' && mcqQuestions.length > 0 
+    ? mcqQuestions 
+    : questionsByRound[currentRound];
+  const currentQuestion: any = currentRoundQuestions[currentQuestionIndex];
   const totalQuestions = currentRoundQuestions.length;
-  const currentAnswer = roundProgress[currentRound].answers[currentQuestion.id];
+  const currentAnswer = roundProgress[currentRound].answers[currentQuestion?.question_id || currentQuestion?.id];
   const currentRoundConfig = ROUND_CONFIGS[currentRound];
 
   // Get overall progress
@@ -121,13 +174,15 @@ export default function Assessment() {
   }, []);
 
   const handleAnswerChange = (value: any) => {
+    // For MCQ from API, use question_id; for mock questions, use id
+    const questionId = currentQuestion.question_id || currentQuestion.id;
     setRoundProgress(prev => ({
       ...prev,
       [currentRound]: {
         ...prev[currentRound],
         answers: {
           ...prev[currentRound].answers,
-          [currentQuestion.id]: value
+          [questionId]: value
         },
         currentQuestionIndex
       }
@@ -147,34 +202,42 @@ export default function Assessment() {
     setIsRunning(false);
   };
 
-  const completeCurrentRound = async () => {
-    // If completing MCQ round, submit all answers to backend
-    if (currentRound === 'mcq') {
-      try {
-        addLog('info', 'Submitting MCQ answers...');
-        
-        // Prepare answers in the format backend expects
-        const answers = Object.entries(roundProgress.mcq.answers).map(([questionId, answer]) => ({
-          question_id: parseInt(questionId),
-          answer_option: answer
-        }));
-        
-        // Submit and lock the MCQ round
-        const result = await mcqApi.completeRound(answers);
-        
-        if (result.error) {
-          addLog('error', `Failed to submit MCQ answers: ${result.error}`);
-          console.error('MCQ submission error:', result.error);
-        } else {
-          addLog('success', `MCQ answers submitted successfully! Total: ${answers.length}`);
-          console.log('MCQ submission result:', result.data);
+  const submitAllMCQAnswers = async () => {
+    setMcqSubmitting(true);
+    try {
+      addLog('info', 'Submitting all MCQ answers for evaluation...');
+      
+      const answers = roundProgress.mcq.answers;
+      let successCount = 0;
+      
+      // Submit all answers in background (don't wait for responses)
+      const submissions = Object.entries(answers).map(async ([questionId, selectedOption]) => {
+        try {
+          const response = await mcqApi.submitAnswer(parseInt(questionId), selectedOption as number);
+          if (!response.error) {
+            successCount++;
+          }
+        } catch (error) {
+          console.error(`Failed to submit answer for question ${questionId}:`, error);
         }
-      } catch (error) {
-        addLog('error', 'Error submitting MCQ answers');
-        console.error('MCQ submission error:', error);
-      }
+      });
+      
+      // Don't wait for all to complete - let them run in background
+      Promise.all(submissions).then(() => {
+        console.log(`✅ MCQ evaluation complete: ${successCount}/${Object.keys(answers).length} submitted`);
+        addLog('success', `MCQ evaluation complete: ${successCount} answers processed`);
+      });
+      
+    } catch (error) {
+      console.error('Error in batch submission:', error);
+      addLog('error', 'Some answers may not have been submitted');
+    } finally {
+      setMcqSubmitting(false);
     }
-    
+  };
+
+  const completeCurrentRound = async () => {
+    // Mark round as completed in state
     setRoundProgress(prev => ({
       ...prev,
       [currentRound]: {
@@ -183,6 +246,9 @@ export default function Assessment() {
         completedAt: new Date()
       }
     }));
+    
+    // Round completion is tracked via batch submission for MCQ
+    // For other rounds, you would call their respective completion APIs here
   };
 
   const moveToNextRound = () => {
@@ -210,6 +276,35 @@ export default function Assessment() {
   };
 
   const handleSubmitQuestion = async () => {
+    // Handle MCQ submission - just move to next question (batch submit at end)
+    if (currentRound === 'mcq' && mcqQuestions.length > 0) {
+      const selectedOption = currentAnswer;
+      
+      if (!selectedOption) {
+        addLog('error', 'Please select an answer before submitting');
+        return;
+      }
+      
+      addLog('success', `Answer saved for Question ${currentQuestionIndex + 1}`);
+      
+      // Move to next question or complete round
+      if (currentQuestionIndex < totalQuestions - 1) {
+        handleNext();
+      } else {
+        // MCQ round completed - batch submit all answers
+        await submitAllMCQAnswers();
+        await completeCurrentRound();
+        addLog('success', 'MCQ round completed! Moving to next round...');
+        
+        // Move to next round immediately (evaluation happens in background)
+        setTimeout(() => {
+          moveToNextRound();
+        }, 500);
+      }
+      return;
+    }
+    
+    // Handle other question types
     if (currentQuestion.type === 'coding') {
       handleRunCode();
     }
@@ -243,6 +338,19 @@ export default function Assessment() {
 
   // Helper to map current question props to ProblemViewer
   const getProblemViewerProps = () => {
+    // Handle MCQ questions from API (different format)
+    if (currentRound === 'mcq' && mcqQuestions.length > 0) {
+      return {
+        problemTitle: `Question ${currentQuestion.question_id}`,
+        problemDescription: currentQuestion.question,
+        instructions: [
+          "Select the best option from the available choices.",
+          "Your answer will be checked immediately after submission."
+        ]
+      };
+    }
+
+    // Handle mock questions
     const props: any = {
       problemTitle: currentQuestion.title,
       problemDescription: currentQuestion.description,
@@ -273,6 +381,29 @@ export default function Assessment() {
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="text-muted-foreground">Loading assessment...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state when MCQ questions are being loaded
+  if (currentRound === 'mcq' && mcqQuestions.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Loading MCQ questions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Safety check for currentQuestion
+  if (!currentQuestion) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-muted-foreground">No questions available</p>
         </div>
       </div>
     );
@@ -334,7 +465,7 @@ export default function Assessment() {
           <div className="flex items-center gap-4">
             <h1 className="text-sm font-medium">{currentRoundConfig.name}</h1>
             <Badge variant="outline" className="text-xs">
-              {currentQuestion.type.toUpperCase()}
+              {(currentQuestion.type || currentRound).toUpperCase()}
             </Badge>
           </div>
 

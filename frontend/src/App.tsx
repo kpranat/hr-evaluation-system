@@ -14,6 +14,7 @@ import Landing from "@/pages/Landing";
 import CandidateHome from "@/pages/CandidateHome";
 import CandidateLogin from "@/pages/CandidateLogin";
 import Assessment from "@/pages/Assessment";
+import MCQTest from "@/pages/MCQTest";
 
 // Recruiter Pages
 import RecruiterLogin from "@/pages/RecruiterLogin";
@@ -42,6 +43,7 @@ const App = () => (
               <Route path="/" element={<Landing />} />
               <Route path="/candidate/login" element={<CandidateLogin />} />
               <Route path="/candidate" element={<CandidateHome />} />
+              <Route path="/candidate/mcq-test" element={<MCQTest />} />
               <Route path="/assessment/:id" element={<Assessment />} />
             </Route>
 

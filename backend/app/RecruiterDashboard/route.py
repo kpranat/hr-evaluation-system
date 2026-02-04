@@ -5,7 +5,7 @@ Handles all recruiter dashboard operations
 
 from flask import request, jsonify
 from . import RecruiterDashboard
-from ..models import CandidateAuth
+from ..models import CandidateAuth, MCQQuestion
 from ..extensions import db
 from ..config import Config
 import jwt
@@ -224,6 +224,191 @@ def upload_candidates():
     except Exception as e:
         import traceback
         print(f"\n❌ BULK UPLOAD ERROR: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'An error occurred: {str(e)}'
+        }), 500
+
+
+@RecruiterDashboard.route('/mcq/upload', methods=['POST'])
+def upload_mcq_questions():
+    """
+    MCQ QUESTIONS BULK UPLOAD ENDPOINT
+    
+    Uploads MCQ questions from CSV or Excel file.
+    Required columns: question_id, question, option1, option2, option3, option4, correct_answer
+    
+    Authentication: Required (JWT Bearer token - recruiter only)
+    """
+    try:
+        # Verify recruiter authentication
+        is_valid, payload_or_error, status_code = verify_recruiter_token(request)
+        
+        if not is_valid:
+            return jsonify({
+                'success': False,
+                'message': payload_or_error
+            }), status_code
+        
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': 'No file provided'
+            }), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'message': 'No file selected'
+            }), 400
+        
+        # Validate file extension
+        allowed_extensions = {'.csv', '.xlsx', '.xls'}
+        file_ext = '.' + file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({
+                'success': False,
+                'message': f'Invalid file type. Allowed: {", ".join(allowed_extensions)}'
+            }), 400
+        
+        # Read file
+        try:
+            if file_ext == '.csv':
+                df = pd.read_csv(io.BytesIO(file.read()))
+            else:
+                df = pd.read_excel(io.BytesIO(file.read()))
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'message': f'Error reading file: {str(e)}'
+            }), 400
+        
+        # Validate required columns
+        required_columns = ['question_id', 'question', 'option1', 'option2', 'option3', 'option4', 'correct_answer']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            return jsonify({
+                'success': False,
+                'message': f'Missing columns: {", ".join(missing_columns)}'
+            }), 400
+        
+        # Process questions
+        results = {
+            'total': len(df),
+            'created': 0,
+            'updated': 0,
+            'skipped': 0,
+            'errors': []
+        }
+        
+        for index, row in df.iterrows():
+            try:
+                question_id = row.get('question_id')
+                question = str(row.get('question', '')).strip()
+                option1 = str(row.get('option1', '')).strip()
+                option2 = str(row.get('option2', '')).strip()
+                option3 = str(row.get('option3', '')).strip()
+                option4 = str(row.get('option4', '')).strip()
+                correct_answer = row.get('correct_answer')
+                
+                # Validate question_id
+                if pd.isna(question_id):
+                    results['skipped'] += 1
+                    results['errors'].append(f"Row {index + 2}: Missing question_id")
+                    continue
+                
+                try:
+                    question_id = int(question_id)
+                except (ValueError, TypeError):
+                    results['skipped'] += 1
+                    results['errors'].append(f"Row {index + 2}: Invalid question_id")
+                    continue
+                
+                # Validate required fields
+                if not question or question == 'nan':
+                    results['skipped'] += 1
+                    results['errors'].append(f"Row {index + 2}: Missing question")
+                    continue
+                
+                for opt_num in range(1, 5):
+                    opt = locals()[f'option{opt_num}']
+                    if not opt or opt == 'nan':
+                        results['skipped'] += 1
+                        results['errors'].append(f"Row {index + 2}: Missing option{opt_num}")
+                        continue
+                
+                # Validate correct_answer
+                if pd.isna(correct_answer):
+                    results['skipped'] += 1
+                    results['errors'].append(f"Row {index + 2}: Missing correct_answer")
+                    continue
+                
+                try:
+                    correct_answer = int(correct_answer)
+                    if correct_answer not in [1, 2, 3, 4]:
+                        results['skipped'] += 1
+                        results['errors'].append(f"Row {index + 2}: correct_answer must be 1, 2, 3, or 4")
+                        continue
+                except (ValueError, TypeError):
+                    results['skipped'] += 1
+                    results['errors'].append(f"Row {index + 2}: correct_answer must be a number")
+                    continue
+                
+                # Check if question exists
+                existing = MCQQuestion.query.filter_by(question_id=question_id).first()
+                
+                if existing:
+                    # Update existing
+                    existing.question = question
+                    existing.option1 = option1
+                    existing.option2 = option2
+                    existing.option3 = option3
+                    existing.option4 = option4
+                    existing.correct_answer = correct_answer
+                    results['updated'] += 1
+                else:
+                    # Create new
+                    new_question = MCQQuestion(
+                        question_id=question_id,
+                        question=question,
+                        option1=option1,
+                        option2=option2,
+                        option3=option3,
+                        option4=option4,
+                        correct_answer=correct_answer
+                    )
+                    db.session.add(new_question)
+                    results['created'] += 1
+                    
+            except Exception as e:
+                results['skipped'] += 1
+                results['errors'].append(f"Row {index + 2}: {str(e)}")
+        
+        # Commit changes
+        try:
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': f'Processed {results["total"]} questions',
+                'results': results
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'message': f'Database error: {str(e)}',
+                'results': results
+            }), 500
+            
+    except Exception as e:
+        import traceback
+        print(f"\n❌ MCQ UPLOAD ERROR: {str(e)}")
         print(traceback.format_exc())
         return jsonify({
             'success': False,

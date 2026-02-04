@@ -68,26 +68,61 @@ class RecruiterAuth(db.Model):
             'email': self.email
         }
 
-#====================== MCQ Response ============================
-class MCQResponse(db.Model):
-    __tablename__ = 'mcq_responses'
+#====================== MCQ Questions ============================
+class MCQQuestion(db.Model):
+    __tablename__ = 'mcq_questions'
     
     id = db.Column(db.Integer, primary_key=True)
-    question_id = db.Column(db.Integer, nullable=False)  # ID of the MCQ question
-    candidate_id = db.Column(db.Integer, db.ForeignKey('candidate_auth.id'), nullable=False)  # Foreign key to candidate
-    answer_option = db.Column(db.String(10), nullable=False)  # Selected option (e.g., 'a', 'b', 'c', 'd')
-    answered_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)  # Timestamp
+    question_id = db.Column(db.Integer, unique=True, nullable=False)  # Unique question identifier
+    question = db.Column(db.Text, nullable=False)  # Question text
+    option1 = db.Column(db.String(500), nullable=False)  # Option 1
+    option2 = db.Column(db.String(500), nullable=False)  # Option 2
+    option3 = db.Column(db.String(500), nullable=False)  # Option 3
+    option4 = db.Column(db.String(500), nullable=False)  # Option 4
+    correct_answer = db.Column(db.Integer, nullable=False)  # Correct option number (1, 2, 3, or 4)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def to_dict(self, include_answer=False):
+        """Convert to dictionary for JSON serialization"""
+        data = {
+            'id': self.id,
+            'question_id': self.question_id,
+            'question': self.question,
+            'options': [
+                {'id': 1, 'text': self.option1},
+                {'id': 2, 'text': self.option2},
+                {'id': 3, 'text': self.option3},
+                {'id': 4, 'text': self.option4}
+            ]
+        }
+        if include_answer:
+            data['correct_answer'] = self.correct_answer
+        return data
+
+#====================== MCQ Results ============================
+class MCQResult(db.Model):
+    __tablename__ = 'mcq_results'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('candidate_auth.id'), nullable=False, unique=True)
+    correct_answers = db.Column(db.Integer, default=0, nullable=False)
+    wrong_answers = db.Column(db.Integer, default=0, nullable=False)
+    percentage_correct = db.Column(db.Float, default=0.0, nullable=False)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     # Relationship to candidate
-    candidate = db.relationship('CandidateAuth', backref=db.backref('mcq_responses', lazy=True))
+    candidate = db.relationship('CandidateAuth', backref=db.backref('mcq_result', uselist=False))
     
     def to_dict(self):
         """Convert to dictionary for JSON serialization"""
         return {
             'id': self.id,
-            'question_id': self.question_id,
-            'candidate_id': self.candidate_id,
-            'answer_option': self.answer_option,
-            'answered_at': self.answered_at.isoformat() if self.answered_at else None
+            'student_id': self.student_id,
+            'correct_answers': self.correct_answers,
+            'wrong_answers': self.wrong_answers,
+            'percentage_correct': self.percentage_correct,
+            'total_answered': self.correct_answers + self.wrong_answers,
+            'last_updated': self.last_updated.isoformat() if self.last_updated else None
         }
 

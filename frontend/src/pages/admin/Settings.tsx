@@ -4,8 +4,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { useState } from 'react';
+import MCQUploadDialog from '@/components/molecules/MCQUploadDialog';
+import { Upload } from 'lucide-react';
 
 export default function Settings() {
+  const [mcqDialogOpen, setMcqDialogOpen] = useState(false);
+
   return (
     <div className="space-y-6 animate-fade-in max-w-2xl">
       {/* Page Header */}
@@ -36,6 +41,33 @@ export default function Settings() {
           <div className="space-y-2">
             <Label htmlFor="email">Notification Email</Label>
             <Input id="email" type="email" placeholder="hr@company.com" />
+          </div>
+        </div>
+      </Card>
+
+      {/* MCQ Management */}
+      <Card className="p-6 space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold">MCQ Question Bank</h2>
+          <p className="text-sm text-muted-foreground">
+            Upload and manage multiple choice questions for assessments.
+          </p>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Bulk Upload Questions</Label>
+              <p className="text-sm text-muted-foreground">
+                Upload MCQ questions from CSV or Excel file
+              </p>
+            </div>
+            <Button onClick={() => setMcqDialogOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload MCQs
+            </Button>
           </div>
         </div>
       </Card>
@@ -108,6 +140,15 @@ export default function Settings() {
 
         <Button>Save Changes</Button>
       </Card>
+
+      {/* MCQ Upload Dialog */}
+      <MCQUploadDialog
+        open={mcqDialogOpen}
+        onOpenChange={setMcqDialogOpen}
+        onUploadComplete={() => {
+          console.log('MCQ upload completed');
+        }}
+      />
     </div>
   );
 }

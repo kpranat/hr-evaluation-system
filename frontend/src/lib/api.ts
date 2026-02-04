@@ -151,8 +151,22 @@ export const adminApi = {
 // ============ MCQ Endpoints ============
 
 export const mcqApi = {
-  /** Submit a single MCQ answer */
-  submitAnswer: async (questionId: number, answerOption: string) => {
+  /** Get all MCQ questions (without correct answers) */
+  getQuestions: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/mcq/questions', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+
+  /** Submit answer and get immediate feedback */
+  submitAnswer: async (questionId: number, selectedOption: number) => {
     const token = localStorage.getItem('candidate_token');
     if (!token) {
       return { data: null, error: 'No authentication token found' };
@@ -165,65 +179,19 @@ export const mcqApi = {
       },
       body: JSON.stringify({
         question_id: questionId,
-        answer_option: answerOption,
+        selected_option: selectedOption,
       }),
     });
   },
 
-  /** Submit multiple MCQ answers at once */
-  batchSubmit: async (answers: Array<{ question_id: number; answer_option: string }>) => {
+  /** Get current MCQ result/score */
+  getResult: async () => {
     const token = localStorage.getItem('candidate_token');
     if (!token) {
       return { data: null, error: 'No authentication token found' };
     }
 
-    return request('/api/mcq/batch-submit', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ answers }),
-    });
-  },
-
-  /** Complete MCQ round and lock it */
-  completeRound: async (answers: Array<{ question_id: number; answer_option: string }>) => {
-    const token = localStorage.getItem('candidate_token');
-    if (!token) {
-      return { data: null, error: 'No authentication token found' };
-    }
-
-    return request('/api/mcq/complete-round', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ answers }),
-    });
-  },
-
-  /** Get all MCQ responses for the candidate */
-  getResponses: async () => {
-    const token = localStorage.getItem('candidate_token');
-    if (!token) {
-      return { data: null, error: 'No authentication token found' };
-    }
-
-    return request('/api/mcq/responses', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-  },
-
-  /** Get MCQ response for a specific question */
-  getResponse: async (questionId: number) => {
-    const token = localStorage.getItem('candidate_token');
-    if (!token) {
-      return { data: null, error: 'No authentication token found' };
-    }
-
-    return request(`/api/mcq/responses/${questionId}`, {
+    return request('/api/mcq/result', {
       headers: {
         'Authorization': `Bearer ${token}`,
       },

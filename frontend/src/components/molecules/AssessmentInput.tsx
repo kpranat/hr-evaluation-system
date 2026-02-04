@@ -34,30 +34,35 @@ export function AssessmentInput({
         );
     }
 
-    // Render MCQ Interface
-    if (question.type === 'mcq') {
+    // Render MCQ Interface (handles both API format and mock format)
+    if (question.type === 'mcq' || question.options) {
         return (
             <div className="h-full flex flex-col p-6 max-w-2xl mx-auto w-full">
                 <h3 className="text-lg font-medium mb-6">Select the best answer:</h3>
                 <RadioGroup
-                    value={answer as string}
-                    onValueChange={onAnswerChange}
+                    value={answer?.toString()}
+                    onValueChange={(val) => onAnswerChange(question.options[0]?.id ? val : parseInt(val))}
                     className="space-y-4"
                 >
-                    {question.options.map((option) => (
-                        <div key={option.id} className="flex items-center space-x-2">
-                            <RadioGroupItem value={option.id} id={option.id} className="peer sr-only" />
-                            <Label
-                                htmlFor={option.id}
-                                className="flex items-center w-full p-4 rounded-lg border-2 border-muted bg-card hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
-                            >
-                                <div className="w-5 h-5 rounded-full border border-primary mr-3 flex items-center justify-center peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground">
-                                    {answer === option.id && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
-                                </div>
-                                <span className="text-base">{option.text}</span>
-                            </Label>
-                        </div>
-                    ))}
+                    {question.options.map((option) => {
+                        const optionId = option.id.toString();
+                        const isSelected = answer?.toString() === optionId;
+                        
+                        return (
+                            <div key={optionId} className="flex items-center space-x-2">
+                                <RadioGroupItem value={optionId} id={optionId} className="peer sr-only" />
+                                <Label
+                                    htmlFor={optionId}
+                                    className="flex items-center w-full p-4 rounded-lg border-2 border-muted bg-card hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
+                                >
+                                    <div className="w-5 h-5 rounded-full border border-primary mr-3 flex items-center justify-center">
+                                        {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                                    </div>
+                                    <span className="text-base">{option.text}</span>
+                                </Label>
+                            </div>
+                        );
+                    })}
                 </RadioGroup>
                 <div className="mt-8 flex justify-end">
                     <Button onClick={onSubmit} size="lg" disabled={!answer}>
