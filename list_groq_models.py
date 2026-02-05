@@ -3,7 +3,7 @@ import os
 from groq import Groq
 
 def list_models():
-    api_key = "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"
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         print("Error: GROQ_API_KEY not set")
         return
