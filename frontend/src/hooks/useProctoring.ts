@@ -108,7 +108,10 @@ export function useProctoring({ assessmentId, onViolation }: UseProctoringProps 
     }, [sessionId]);
 
     const logViolation = useCallback(async (violationType: string, violationData: any) => {
-        if (!sessionId) return;
+        if (!sessionId) {
+            console.warn(`[Proctor Warning] Attempted to log '${violationType}' but sessionId is missing! violationCounts not updated.`);
+            return;
+        }
 
         // Client-side aggregation ONLY
         if (violationCountsRef.current[violationType] !== undefined) {
@@ -119,9 +122,6 @@ export function useProctoring({ assessmentId, onViolation }: UseProctoringProps 
         }
 
         console.log(`[Proctor Local Log] ${violationType} count: ${violationCountsRef.current[violationType]}`);
-
-        // REMOVED: Real-time DB logging
-        // await fetch(...)
     }, [sessionId]);
 
     const analyzeFrame = useCallback(async (base64Image: string) => {

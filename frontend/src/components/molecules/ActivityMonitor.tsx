@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Activity, Keyboard, Copy, MousePointer, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,9 +26,9 @@ export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMo
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     // logActivityToBackend removed - using onViolation prop instead
-    const logActivity = (type: string, details?: any) => {
+    const logActivity = useCallback((type: string, details?: any) => {
         onViolation(type, details);
-    };
+    }, [onViolation]);
 
     const toggleCollapse = () => {
         setIsCollapsed(!isCollapsed);
@@ -75,7 +75,7 @@ export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMo
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
-    }, []);
+    }, [logActivity]);
 
     // Track clipboard activity
     useEffect(() => {
@@ -110,7 +110,7 @@ export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMo
             window.removeEventListener('copy', handleCopy);
             window.removeEventListener('paste', handlePaste);
         };
-    }, []);
+    }, [logActivity]);
 
     // Track mouse leaving window
     useEffect(() => {
@@ -127,7 +127,7 @@ export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMo
 
         document.addEventListener('mouseleave', handleMouseLeave);
         return () => document.removeEventListener('mouseleave', handleMouseLeave);
-    }, []);
+    }, [logActivity]);
 
     // Track tab/window switching
     useEffect(() => {
@@ -146,7 +146,7 @@ export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMo
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, []);
+    }, [logActivity]);
 
     const addEvent = (event: ActivityEvent) => {
         setEvents(prev => [event, ...prev].slice(0, 5)); // Keep last 5 events
