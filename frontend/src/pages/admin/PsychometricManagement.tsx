@@ -167,6 +167,18 @@ export default function PsychometricManagement() {
                 <p className="text-2xl font-bold capitalize">{config.selection_mode}</p>
               </div>
             </div>
+            {config.desired_traits && (
+              <div>
+                <p className="text-sm font-medium mb-2">Desired Personality Traits</p>
+                <div className="flex flex-wrap gap-2">
+                  {JSON.parse(config.desired_traits).map((traitType: number) => (
+                    <Badge key={traitType} className={`${TRAIT_COLORS[traitType]} text-white`}>
+                      {TRAIT_NAMES[traitType]}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
             {config.selection_mode === 'manual' && config.selected_question_ids && (
               <div>
                 <p className="text-sm font-medium mb-2">Selected Questions</p>

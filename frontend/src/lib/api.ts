@@ -261,7 +261,7 @@ export const psychometricApi = {
   },
 
   /** Set test configuration (recruiter) */
-  setConfig: async (recruiterId: number, numQuestions: number, selectionMode: 'random' | 'manual', selectedQuestionIds?: number[]) => {
+  setConfig: async (recruiterId: number, numQuestions: number, selectionMode: 'random' | 'manual', selectedQuestionIds?: number[], desiredTraits?: number[]) => {
     // recruiterId parameter kept for backwards compatibility but not sent to backend
     // Backend extracts recruiter_id from JWT token
     const token = localStorage.getItem('recruiterToken');
@@ -274,6 +274,7 @@ export const psychometricApi = {
         num_questions: numQuestions,
         selection_mode: selectionMode,
         selected_question_ids: selectedQuestionIds,
+        desired_traits: desiredTraits,
       }),
     });
   },

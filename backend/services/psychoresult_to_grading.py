@@ -19,7 +19,7 @@ def evaluate_psychometric_match(psychometric_scores, target_trait):
     prompt = f"""
     Evaluate the candidate's psychometric fit for a role requiring high {target_trait}.
     
-    Candidate Scores (0-100 scale or similar):
+    Candidate Scores (0-10 scale or similar):
     {json.dumps(psychometric_scores, indent=2)}
     
     Target Trait: {target_trait}

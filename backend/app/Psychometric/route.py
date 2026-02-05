@@ -162,6 +162,7 @@ def set_test_configuration():
         num_questions = data.get('num_questions', 50)
         selection_mode = data.get('selection_mode', 'random')  # 'random' or 'manual'
         selected_question_ids = data.get('selected_question_ids')  # Array of IDs for manual mode
+        desired_traits = data.get('desired_traits')  # Array of desired trait types (1-5)
         
         # Validate number of questions
         if num_questions < 15:
@@ -200,6 +201,7 @@ def set_test_configuration():
             num_questions=num_questions,
             selection_mode=selection_mode,
             selected_question_ids=json.dumps(selected_question_ids) if selected_question_ids else None,
+            desired_traits=json.dumps(desired_traits) if desired_traits else None,
             is_active=True
         )
         

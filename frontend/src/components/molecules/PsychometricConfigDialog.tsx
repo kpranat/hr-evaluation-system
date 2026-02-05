@@ -59,6 +59,7 @@ export function PsychometricConfigDialog({ recruiterId, onConfigSaved }: Psychom
   const [numQuestions, setNumQuestions] = useState(50);
   const [selectionMode, setSelectionMode] = useState<'random' | 'manual'>('random');
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([]);
+  const [desiredTraits, setDesiredTraits] = useState<number[]>([]);
   
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -151,7 +152,8 @@ export function PsychometricConfigDialog({ recruiterId, onConfigSaved }: Psychom
       recruiterId,
       numQuestions,
       selectionMode,
-      selectionMode === 'manual' ? selectedQuestionIds : undefined
+      selectionMode === 'manual' ? selectedQuestionIds : undefined,
+      desiredTraits
     );
 
     if (response.data?.success) {
@@ -235,6 +237,36 @@ export function PsychometricConfigDialog({ recruiterId, onConfigSaved }: Psychom
               </p>
             </div>
 
+            {/* Desired Personality Traits */}
+            <div className="space-y-2">
+              <Label>Desired Personality Traits (Optional)</Label>
+              <p className="text-sm text-muted-foreground mb-2">
+                Select the personality traits you're looking for in candidates
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {Object.entries(TRAIT_NAMES).map(([type, name]) => {
+                  const traitType = parseInt(type);
+                  const isSelected = desiredTraits.includes(traitType);
+                  return (
+                    <Badge
+                      key={type}
+                      variant={isSelected ? "default" : "outline"}
+                      className={`cursor-pointer px-4 py-2 text-base ${isSelected ? `${TRAIT_COLORS[traitType]} text-white` : ''}`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setDesiredTraits(desiredTraits.filter(t => t !== traitType));
+                        } else {
+                          setDesiredTraits([...desiredTraits, traitType]);
+                        }
+                      }}
+                    >
+                      {name}
+                    </Badge>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Selection Mode */}
             <div className="space-y-2">
               <Label>Selection Mode</Label>
@@ -267,64 +299,22 @@ export function PsychometricConfigDialog({ recruiterId, onConfigSaved }: Psychom
                   )}
                 </div>
                 
-                <Tabs defaultValue="all" className="w-full">
-                  <TabsList className="grid w-full grid-cols-6">
-                    <TabsTrigger value="all">All</TabsTrigger>
-                    {Object.entries(TRAIT_NAMES).map(([type, name]) => (
-                      <TabsTrigger key={type} value={type}>
-                        {name.split('/')[0]}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                  
-                  <TabsContent value="all">
-                    <ScrollArea className="h-[300px] border rounded-md p-4">
-                      <div className="space-y-2">
-                        {questions.map((q) => (
-                          <div key={q.question_id} className="flex items-start space-x-2 p-2 hover:bg-accent rounded">
-                            <Checkbox
-                              id={`q-${q.question_id}`}
-                              checked={selectedQuestionIds.includes(q.question_id)}
-                              onCheckedChange={() => handleQuestionToggle(q.question_id)}
-                            />
-                            <Label htmlFor={`q-${q.question_id}`} className="flex-1 cursor-pointer">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className={`text-white ${TRAIT_COLORS[q.trait_type]}`}>
-                                  {TRAIT_NAMES[q.trait_type]}
-                                </Badge>
-                                <span className="text-sm">{q.question}</span>
-                              </div>
-                            </Label>
-                          </div>
-                        ))}
+                <ScrollArea className="h-[300px] border rounded-md p-4">
+                  <div className="space-y-2">
+                    {questions.map((q) => (
+                      <div key={q.question_id} className="flex items-start space-x-2 p-2 hover:bg-accent rounded">
+                        <Checkbox
+                          id={`q-${q.question_id}`}
+                          checked={selectedQuestionIds.includes(q.question_id)}
+                          onCheckedChange={() => handleQuestionToggle(q.question_id)}
+                        />
+                        <Label htmlFor={`q-${q.question_id}`} className="flex-1 cursor-pointer text-sm">
+                          {q.question}
+                        </Label>
                       </div>
-                    </ScrollArea>
-                  </TabsContent>
-
-                  {Object.entries(groupedQuestions).map(([traitName, traitQuestions]) => {
-                    const traitType = traitQuestions[0]?.trait_type;
-                    return (
-                      <TabsContent key={traitName} value={String(traitType)}>
-                        <ScrollArea className="h-[300px] border rounded-md p-4">
-                          <div className="space-y-2">
-                            {traitQuestions.map((q) => (
-                              <div key={q.question_id} className="flex items-start space-x-2 p-2 hover:bg-accent rounded">
-                                <Checkbox
-                                  id={`q-${q.question_id}`}
-                                  checked={selectedQuestionIds.includes(q.question_id)}
-                                  onCheckedChange={() => handleQuestionToggle(q.question_id)}
-                                />
-                                <Label htmlFor={`q-${q.question_id}`} className="flex-1 cursor-pointer text-sm">
-                                  {q.question}
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </TabsContent>
-                    );
-                  })}
-                </Tabs>
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
             )}
 

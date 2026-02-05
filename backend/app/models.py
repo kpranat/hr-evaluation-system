@@ -164,6 +164,7 @@ class PsychometricTestConfig(db.Model):
     num_questions = db.Column(db.Integer, nullable=False, default=50)  # Number of questions to show
     selection_mode = db.Column(db.String(20), nullable=False, default='random')  # 'random' or 'manual'
     selected_question_ids = db.Column(db.Text, nullable=True)  # JSON array of selected question IDs
+    desired_traits = db.Column(db.Text, nullable=True)  # JSON array of desired personality trait types (1-5)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -179,6 +180,7 @@ class PsychometricTestConfig(db.Model):
             'num_questions': self.num_questions,
             'selection_mode': self.selection_mode,
             'selected_question_ids': self.selected_question_ids,
+            'desired_traits': self.desired_traits,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
@@ -295,12 +297,33 @@ class ProctorSession(db.Model):
             'id': self.id,
             'candidate_id': self.candidate_id,
             'assessment_id': self.assessment_id,
-            'session_uuid': self.session_uuid,
             'start_time': self.start_time.isoformat() if self.start_time else None,
             'end_time': self.end_time.isoformat() if self.end_time else None,
             'status': self.status
         }
 
+#====================== Proctor Event ============================
+class ProctorEvent(db.Model):
+    __tablename__ = 'proctor_events'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('proctor_sessions.id'), nullable=False)
+    event_type = db.Column(db.String(50), nullable=False)  # multiple_faces, no_face, looking_away, phone_detected, tab_switch, etc.
+    details = db.Column(db.Text, nullable=True)  # JSON or text details about the event
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationship to session
+    session = db.relationship('ProctorSession', backref=db.backref('events'))
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'session_id': self.session_id,
+            'event_type': self.event_type,
+            'details': self.details,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+        }
 
 #====================== Code Playback Recording ============================
 class CodePlayback(db.Model):
@@ -326,8 +349,6 @@ class CodePlayback(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
-
-
 
 #====================== Proctoring Violations ============================
 class ProctoringViolation(db.Model):
