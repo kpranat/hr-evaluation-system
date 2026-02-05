@@ -56,6 +56,10 @@ def create_app():
     from .TextBased import TextBased
     app.register_blueprint(TextBased, url_prefix='/api/text-based')
     
+    # Code execution routes (Coding Assessment)
+    from .CodeExecution import CodeExecution
+    app.register_blueprint(CodeExecution, url_prefix='/api/code')
+    
     # Proctor monitoring routes
     from .ProctorService import ProctorService
     app.register_blueprint(ProctorService, url_prefix='/api/proctor')

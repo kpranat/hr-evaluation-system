@@ -20,6 +20,8 @@ interface CandidateData {
   technical_completed_at?: string;
   text_based_completed?: boolean;
   text_based_completed_at?: string;
+  coding_completed?: boolean;
+  coding_completed_at?: string;
 }
 
 export default function CandidateHome() {
@@ -147,11 +149,13 @@ export default function CandidateHome() {
                     const config = ROUND_CONFIGS[roundId];
                     const Icon = roundId === 'mcq' ? CheckSquare :
                       roundId === 'psychometric' ? Brain :
-                        roundId === 'text-based' ? FileText : Code;
+                        roundId === 'text-based' ? FileText :
+                          roundId === 'coding' ? Code : Code;
                     const isCompleted = roundId === 'mcq' ? candidateData?.mcq_completed :
                       roundId === 'psychometric' ? candidateData?.psychometric_completed :
                         roundId === 'text-based' ? candidateData?.text_based_completed :
-                          candidateData?.technical_completed;
+                          roundId === 'coding' ? candidateData?.coding_completed :
+                            candidateData?.technical_completed;
 
                     return (
                       <div key={roundId} className="flex items-start gap-3">
@@ -185,7 +189,7 @@ export default function CandidateHome() {
                   })}
                 </div>
 
-                {candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed && candidateData?.text_based_completed ? (
+                {candidateData?.mcq_completed && candidateData?.psychometric_completed && candidateData?.technical_completed && candidateData?.text_based_completed && candidateData?.coding_completed ? (
                   <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-3 rounded-lg">
                     <p className="text-sm text-green-700 dark:text-green-400 font-medium">
                       ✓ All assessment rounds completed! Our team will review your responses and get back to you soon.
@@ -195,7 +199,7 @@ export default function CandidateHome() {
                   <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3 rounded-lg">
                     <p className="text-xs text-blue-700 dark:text-blue-400">
                       <strong>Note:</strong> You must complete each round in sequence:
-                      MCQ → Psychometric → Technical → Text-Based. Once completed, a round cannot be retaken.
+                      MCQ → Psychometric → Technical → Text-Based → Coding. Once completed, a round cannot be retaken.
                     </p>
                   </div>
                 )}

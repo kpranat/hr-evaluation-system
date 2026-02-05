@@ -44,7 +44,8 @@ const ROUND_ICONS = {
   mcq: CheckSquare,
   psychometric: Brain,
   technical: Code,
-  'text-based': FileText
+  'text-based': FileText,
+  coding: Code
 };
 
 export default function Assessment() {
@@ -60,7 +61,8 @@ export default function Assessment() {
     mcq: { round: 'mcq', status: 'in-progress', answers: {}, currentQuestionIndex: 0 },
     psychometric: { round: 'psychometric', status: 'not-started', answers: {} },
     technical: { round: 'technical', status: 'not-started', answers: {} },
-    'text-based': { round: 'text-based', status: 'not-started', answers: {} }
+    'text-based': { round: 'text-based', status: 'not-started', answers: {} },
+    coding: { round: 'coding', status: 'not-started', answers: {} }
   });
   const [loading, setLoading] = useState(true);
 
@@ -474,6 +476,15 @@ export default function Assessment() {
         addLog('success', 'Moving to Text-Based Assessment...');
         setTimeout(() => {
           navigate('/candidate/text-based-test');
+        }, 1500);
+        return;
+      }
+
+      // If next round is coding, redirect to dedicated page
+      if (nextRound === 'coding') {
+        addLog('success', 'Moving to Coding Assessment...');
+        setTimeout(() => {
+          navigate('/candidate/coding-test');
         }, 1500);
         return;
       }

@@ -297,8 +297,8 @@ export default function TextBasedTest() {
       const data = await response.json();
       
       if (data.success) {
-        // Redirect to candidate home
-        navigate('/candidate');
+        // Redirect to coding round (next in workflow)
+        navigate('/candidate/coding-test');
       } else {
         setError(data.message || 'Failed to complete test');
       }

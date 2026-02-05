@@ -23,6 +23,8 @@ class CandidateAuth(db.Model):
     technical_completed_at = db.Column(db.DateTime, nullable=True)
     text_based_completed = db.Column(db.Boolean, default=False, nullable=False)
     text_based_completed_at = db.Column(db.DateTime, nullable=True)
+    coding_completed = db.Column(db.Boolean, default=False, nullable=False)
+    coding_completed_at = db.Column(db.DateTime, nullable=True)
     
     def set_password(self, password):
         """Hash and set the password"""
@@ -47,7 +49,9 @@ class CandidateAuth(db.Model):
             'technical_completed': self.technical_completed,
             'technical_completed_at': self.technical_completed_at.isoformat() if self.technical_completed_at else None,
             'text_based_completed': self.text_based_completed,
-            'text_based_completed_at': self.text_based_completed_at.isoformat() if self.text_based_completed_at else None
+            'text_based_completed_at': self.text_based_completed_at.isoformat() if self.text_based_completed_at else None,
+            'coding_completed': self.coding_completed,
+            'coding_completed_at': self.coding_completed_at.isoformat() if self.coding_completed_at else None
         }
 
 #====================== recruiter login ============================
@@ -442,3 +446,139 @@ class CandidateRationale(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     candidate = db.relationship('CandidateAuth', backref=db.backref('rationale', uselist=False))
+
+#====================== Coding Problems ============================
+class CodingProblem(db.Model):
+    __tablename__ = 'coding_problems'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    problem_id = db.Column(db.Integer, unique=True, nullable=False)  # Unique problem identifier
+    title = db.Column(db.String(255), nullable=False)  # Problem title
+    description = db.Column(db.Text, nullable=False)  # Full problem description
+    difficulty = db.Column(db.String(20), nullable=False)  # Easy, Medium, Hard
+    
+    # Starter code for different languages
+    starter_code_python = db.Column(db.Text, nullable=True)
+    starter_code_javascript = db.Column(db.Text, nullable=True)
+    starter_code_java = db.Column(db.Text, nullable=True)
+    starter_code_cpp = db.Column(db.Text, nullable=True)
+    
+    # Test cases stored as JSON array: [{"input": "...", "expected_output": "...", "is_hidden": false}]
+    test_cases_json = db.Column(db.JSON, nullable=False)
+    
+    # Limits
+    time_limit = db.Column(db.Integer, nullable=False, default=1000)  # milliseconds
+    memory_limit = db.Column(db.Integer, nullable=False, default=128)  # MB
+    
+    # Metadata
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def to_dict(self, include_hidden=False):
+        """Convert to dictionary for JSON serialization"""
+        test_cases = self.test_cases_json if self.test_cases_json else []
+        
+        # Filter hidden test cases unless explicitly requested
+        if not include_hidden:
+            test_cases = [tc for tc in test_cases if not tc.get('is_hidden', False)]
+        
+        return {
+            'id': self.id,
+            'problem_id': self.problem_id,
+            'title': self.title,
+            'description': self.description,
+            'difficulty': self.difficulty,
+            'starter_code_python': self.starter_code_python,
+            'starter_code_javascript': self.starter_code_javascript,
+            'starter_code_java': self.starter_code_java,
+            'starter_code_cpp': self.starter_code_cpp,
+            'test_cases': test_cases,
+            'hidden_test_cases_count': len([tc for tc in (self.test_cases_json or []) if tc.get('is_hidden', False)]),
+            'time_limit': self.time_limit,
+            'memory_limit': self.memory_limit,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+#====================== Coding Submissions ============================
+class CodingSubmission(db.Model):
+    __tablename__ = 'coding_submissions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    candidate_id = db.Column(db.Integer, db.ForeignKey('candidate_auth.id'), nullable=False)
+    problem_id = db.Column(db.Integer, db.ForeignKey('coding_problems.problem_id'), nullable=False)
+    
+    # Submission details
+    code = db.Column(db.Text, nullable=False)  # The submitted code
+    language = db.Column(db.String(20), nullable=False)  # python, javascript, java, cpp
+    status = db.Column(db.String(50), nullable=False)  # Accepted, Wrong Answer, Time Limit Exceeded, Runtime Error, etc.
+    
+    # Test results stored as JSON array: [{"test_case_id": 1, "passed": true, "actual_output": "...", "expected_output": "..."}]
+    test_results_json = db.Column(db.JSON, nullable=True)
+    
+    # Performance metrics
+    runtime = db.Column(db.Integer, nullable=True)  # milliseconds
+    memory_usage = db.Column(db.Integer, nullable=True)  # KB
+    
+    # Judge0 tracking
+    judge0_token = db.Column(db.String(255), nullable=True)  # Token from Judge0 API
+    
+    # Metadata
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    candidate = db.relationship('CandidateAuth', backref=db.backref('coding_submissions'))
+    problem = db.relationship('CodingProblem', backref=db.backref('submissions'))
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'candidate_id': self.candidate_id,
+            'problem_id': self.problem_id,
+            'code': self.code,
+            'language': self.language,
+            'status': self.status,
+            'test_results': self.test_results_json,
+            'runtime': self.runtime,
+            'memory_usage': self.memory_usage,
+            'judge0_token': self.judge0_token,
+            'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None
+        }
+
+#====================== Coding Configuration ============================
+class CodingConfiguration(db.Model):
+    __tablename__ = 'coding_configuration'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    recruiter_id = db.Column(db.Integer, db.ForeignKey('recruiter_auth.id'), nullable=False, unique=True)
+    
+    # Configuration
+    problems_count = db.Column(db.Integer, nullable=False, default=3)  # Number of problems to assign
+    time_limit_minutes = db.Column(db.Integer, nullable=False, default=60)  # Total time for coding round
+    
+    # Allowed languages stored as JSON array: ["python", "javascript", "java", "cpp"]
+    allowed_languages_json = db.Column(db.JSON, nullable=False, default=['python', 'javascript'])
+    
+    # Status
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Metadata
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationship to recruiter
+    recruiter = db.relationship('RecruiterAuth', backref=db.backref('coding_configuration', uselist=False))
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'recruiter_id': self.recruiter_id,
+            'problems_count': self.problems_count,
+            'time_limit_minutes': self.time_limit_minutes,
+            'allowed_languages': self.allowed_languages_json if self.allowed_languages_json else [],
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }

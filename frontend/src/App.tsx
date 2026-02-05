@@ -17,6 +17,7 @@ import Assessment from "@/pages/Assessment";
 import MCQTest from "@/pages/MCQTest";
 import PsychometricTest from "@/pages/PsychometricTest";
 import TextBasedTest from "@/pages/TextBasedTest";
+import CodingTest from "@/pages/CodingTest";
 
 // Recruiter Pages
 import RecruiterLogin from "@/pages/RecruiterLogin";
@@ -28,6 +29,7 @@ import CandidateDetail from "@/pages/admin/CandidateDetail";
 import Settings from "@/pages/admin/Settings";
 import PsychometricManagement from "@/pages/admin/PsychometricManagement";
 import EvaluationCriteria from "@/pages/admin/EvaluationCriteria";
+import CodingManagement from "@/pages/admin/CodingManagement";
 
 // Other
 import NotFound from "@/pages/NotFound";
@@ -50,8 +52,9 @@ const App = () => (
               <Route path="/candidate/mcq-test" element={<MCQTest />} />
               <Route path="/candidate/psychometric-test" element={<PsychometricTest />} />
               <Route path="/candidate/text-based-test" element={<TextBasedTest />} />
+              <Route path="/candidate/coding-test" element={<CodingTest />} />
               <Route path="/assessment/:id" element={<Assessment />} />
-            </Route >
+            </Route>
 
             {/* Recruiter Login - Minimal Layout */}
             < Route element={< CandidateLayout />}>
@@ -71,6 +74,7 @@ const App = () => (
               <Route path="candidates" element={<Candidates />} />
               <Route path="psychometric" element={<PsychometricManagement />} />
               <Route path="evaluation-criteria" element={<EvaluationCriteria />} />
+              <Route path="coding" element={<CodingManagement />} />
               <Route path="candidate/:id" element={<CandidateDetail />} />
               <Route path="settings" element={<Settings />} />
             </Route >
