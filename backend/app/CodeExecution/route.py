@@ -98,11 +98,16 @@ def get_coding_problems():
         return error_response
     
     try:
+        print(f"\n✅ Getting problems for candidate_id: {candidate_id}")
+        
         # Get all problems
         problems = CodingProblem.query.all()
+        print(f"✅ Found {len(problems)} problems")
         
         # Get candidate's submissions to determine status
         submissions = CodingSubmission.query.filter_by(candidate_id=candidate_id).all()
+        print(f"✅ Found {len(submissions)} submissions for candidate")
+        
         submission_map = {}
         
         for sub in submissions:
@@ -371,16 +376,26 @@ def submit_solution():
         passed_count = sum(1 for result in test_results if result['passed'])
         total_count = len(test_results)
         
+        # Calculate score percentage
+        score_percentage = (passed_count / total_count * 100) if total_count > 0 else 0.0
+        
+        # Determine status - Always accept submission but mark appropriately
         if passed_count == total_count:
             status = 'Accepted'
-        else:
+        elif passed_count == 0:
             # Check for specific error types
-            has_error = any(result.get('status') != 'Accepted' for result in test_results)
-            if has_error:
-                error_types = set(result.get('status', 'Wrong Answer') for result in test_results if not result['passed'])
-                status = list(error_types)[0] if error_types else 'Wrong Answer'
+            error_statuses = [result.get('status', 'Wrong Answer') for result in test_results if not result['passed']]
+            if any('Time Limit' in s for s in error_statuses):
+                status = 'Time Limit Exceeded'
+            elif any('Runtime Error' in s for s in error_statuses):
+                status = 'Runtime Error'
+            elif any('Compilation Error' in s for s in error_statuses):
+                status = 'Compilation Error'
             else:
                 status = 'Wrong Answer'
+        else:
+            # Partial pass
+            status = f'Partial ({passed_count}/{total_count})'
         
         # Calculate average runtime and memory
         runtimes = [float(result.get('time', 0) or 0) for result in test_results if result.get('time')]
@@ -389,13 +404,16 @@ def submit_solution():
         avg_runtime = int(sum(runtimes) / len(runtimes) * 1000) if runtimes else None  # Convert to ms
         avg_memory = int(sum(memories) / len(memories)) if memories else None
         
-        # Save submission
+        # Save submission - Always save regardless of pass/fail
         submission = CodingSubmission(
             candidate_id=candidate_id,
             problem_id=problem_id,
             code=code,
             language=language,
             status=status,
+            passed_test_cases=passed_count,
+            total_test_cases=total_count,
+            score_percentage=score_percentage,
             test_results_json=test_results,
             runtime=avg_runtime,
             memory_usage=avg_memory
@@ -404,11 +422,12 @@ def submit_solution():
         db.session.add(submission)
         db.session.commit()
         
-        print(f"✅ Submission saved: ID={submission.id}, Status={status}")
+        print(f"✅ Submission saved: ID={submission.id}, Status={status}, Score={score_percentage:.1f}% ({passed_count}/{total_count})")
         
         return jsonify({
             'success': True,
             'submission_id': submission.id,
+            'score_percentage': score_percentage,
             'status': status,
             'passed_count': passed_count,
             'total_count': total_count,
@@ -506,13 +525,7 @@ def complete_coding_round():
                 'message': 'Candidate not found'
             }), 404
         
-        if candidate.coding_completed:
-            return jsonify({
-                'success': False,
-                'message': 'Coding round already completed'
-            }), 400
-        
-        # Mark as completed
+        # Mark as completed (allow recompletion for testing)
         candidate.coding_completed = True
         candidate.coding_completed_at = datetime.utcnow()
         

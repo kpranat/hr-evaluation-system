@@ -513,6 +513,11 @@ class CodingSubmission(db.Model):
     language = db.Column(db.String(20), nullable=False)  # python, javascript, java, cpp
     status = db.Column(db.String(50), nullable=False)  # Accepted, Wrong Answer, Time Limit Exceeded, Runtime Error, etc.
     
+    # Test case scoring
+    passed_test_cases = db.Column(db.Integer, nullable=False, default=0)  # Number of test cases passed
+    total_test_cases = db.Column(db.Integer, nullable=False, default=0)  # Total number of test cases
+    score_percentage = db.Column(db.Float, nullable=False, default=0.0)  # Percentage score (0.0 to 100.0)
+    
     # Test results stored as JSON array: [{"test_case_id": 1, "passed": true, "actual_output": "...", "expected_output": "..."}]
     test_results_json = db.Column(db.JSON, nullable=True)
     
@@ -539,6 +544,9 @@ class CodingSubmission(db.Model):
             'code': self.code,
             'language': self.language,
             'status': self.status,
+            'passed_test_cases': self.passed_test_cases,
+            'total_test_cases': self.total_test_cases,
+            'score_percentage': self.score_percentage,
             'test_results': self.test_results_json,
             'runtime': self.runtime,
             'memory_usage': self.memory_usage,

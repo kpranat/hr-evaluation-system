@@ -333,10 +333,179 @@ export const psychometricApi = {
   },
 };
 
+// ============ Text-Based Endpoints ============
+
+export const textBasedApi = {
+  /** Get all text-based questions */
+  getQuestions: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/text-based/questions', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+
+  /** Submit an answer to a text-based question */
+  submitAnswer: async (questionId: number, answer: string) => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/text-based/submit', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        question_id: questionId,
+        answer: answer,
+      }),
+    });
+  },
+
+  /** Get all answers submitted by the candidate */
+  getAnswers: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/text-based/answers', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+
+  /** Mark text-based round as complete */
+  complete: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/text-based/complete', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+};
+
+// ============ Coding Assessment Endpoints ============
+
+export const codingApi = {
+  /** Get coding configuration */
+  getConfig: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/code/config', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+
+  /** Get all coding problems */
+  getProblems: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/code/problems', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+
+  /** Get problem details by problem_id */
+  getProblemDetail: async (problemId: number) => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request(`/api/code/problems/${problemId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+
+  /** Execute code with visible test cases */
+  executeCode: async (code: string, language: string, problemId: number) => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/code/execute', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        code,
+        language,
+        problem_id: problemId,
+      }),
+    });
+  },
+
+  /** Submit solution with all test cases */
+  submitSolution: async (problemId: number, code: string, language: string) => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/code/submit', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        problem_id: problemId,
+        code,
+        language,
+      }),
+    });
+  },
+
+  /** Mark coding round as complete */
+  complete: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/code/complete', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+};
+
 export default {
   candidate: candidateApi,
   recruiter: recruiterApi,
   admin: adminApi,
   mcq: mcqApi,
   psychometric: psychometricApi,
+  textBased: textBasedApi,
+  coding: codingApi,
 };

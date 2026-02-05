@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { WebcamMonitor } from '@/components/molecules/WebcamMonitor';
+import { ActivityMonitor } from '@/components/molecules/ActivityMonitor';
+import { useProctoring } from '@/hooks/useProctoring';
+import { useFaceDetection, ViolationEvent } from '@/hooks/useFaceDetection';
+import { useObjectDetection } from '@/hooks/useObjectDetection';
 import { 
   Code, 
   Play, 
@@ -68,6 +73,9 @@ interface Submission {
   runtime: number;
   memory_usage: number;
   submitted_at: string;
+  passed_test_cases?: number;
+  total_test_cases?: number;
+  score_percentage?: number;
 }
 
 const LANGUAGE_MAP: Record<string, { label: string; monacoLang: string }> = {
@@ -79,6 +87,7 @@ const LANGUAGE_MAP: Record<string, { label: string; monacoLang: string }> = {
 
 export default function CodingTest() {
   const navigate = useNavigate();
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [selectedProblem, setSelectedProblem] = useState<ProblemDetail | null>(null);
   const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
@@ -92,10 +101,63 @@ export default function CodingTest() {
   const [config, setConfig] = useState<any>(null);
   const [timerStarted, setTimerStarted] = useState(false);
 
+  // AI Proctoring Integration
+  const {
+    sessionId: proctorSessionId,
+    isMonitoring,
+    status: proctorStatus,
+    startSession: startProctorSession,
+    stopSession: stopProctorSession,
+    logViolation
+  } = useProctoring({
+    assessmentId: 'coding-round'
+  });
+
+  // Client-Side Face Detection
+  const { stream } = useFaceDetection({
+    enabled: isMonitoring,
+    detectionInterval: 500,
+    onViolation: (event: ViolationEvent) => {
+      const { type, details } = event;
+      console.log(`🚨 Proctoring violation: ${type}`, details);
+      toast.error(`Security Alert: ${type.replace('_', ' ')}`);
+      logViolation(type, details);
+    }
+  });
+
+  // Client-Side Phone Detection
+  useObjectDetection({
+    enabled: isMonitoring,
+    videoRef,
+    onViolation: (type, details) => {
+      console.log(`📱 Phone violation: ${type}`, details);
+      toast.error('Security Alert: Phone Detected!');
+      logViolation(type, details);
+    }
+  });
+
   // Fetch configuration and problems on mount
   useEffect(() => {
     fetchConfig();
     fetchProblems();
+    initProctoring();
+  }, []);
+
+  // Initialize proctoring
+  const initProctoring = async () => {
+    const sessionId = await startProctorSession();
+    if (sessionId) {
+      console.log('✅ Proctoring session started:', sessionId);
+      toast.info('AI Proctoring activated');
+    }
+  };
+
+  // Cleanup proctoring on unmount
+  useEffect(() => {
+    return () => {
+      stopProctorSession();
+      console.log('🔴 Proctoring session ended');
+    };
   }, []);
 
   // Timer
@@ -292,11 +354,13 @@ export default function CodingTest() {
         setTestResults(data.test_results);
         
         if (data.status === 'Accepted') {
-          toast.success('Solution accepted! ✅');
+          toast.success('Solution accepted! ✅ All test cases passed');
           // Refresh problems to update status
           fetchProblems();
+        } else if (data.status && data.status.startsWith('Partial')) {
+          toast.warning(`Partial solution: ${data.passed_count}/${data.total_count} test cases passed (${data.score_percentage.toFixed(1)}%)`);
         } else {
-          toast.error(`Submission ${data.status}`);
+          toast.error(`Submission ${data.status} - ${data.passed_count}/${data.total_count} test cases passed`);
         }
         
         // Refresh submissions
@@ -324,8 +388,18 @@ export default function CodingTest() {
       const data = await response.json();
 
       if (data.success) {
-        toast.success('Coding round completed!');
-        navigate('/candidate');
+        // Stop proctoring session
+        stopProctorSession();
+        
+        toast.success('Assessment completed successfully! Thank you.');
+        
+        // Clear authentication token
+        localStorage.removeItem('candidate_token');
+        
+        // Redirect to landing page immediately
+        setTimeout(() => {
+          navigate('/');
+        }, 1500);
       } else {
         toast.error(data.message || 'Failed to complete round');
       }
@@ -664,24 +738,44 @@ export default function CodingTest() {
                           No submissions yet
                         </p>
                       ) : (
-                        submissions.map((submission) => (
-                          <div key={submission.id} className="p-3 rounded-lg border">
-                            <div className="flex items-start justify-between mb-2">
-                              <Badge variant={submission.status === 'Accepted' ? 'default' : 'destructive'}>
-                                {submission.status}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(submission.submitted_at).toLocaleTimeString()}
-                              </span>
+                        submissions.map((submission) => {
+                          const isAccepted = submission.status === 'Accepted';
+                          const isPartial = submission.status && submission.status.startsWith('Partial');
+                          const scorePercentage = submission.score_percentage;
+                          
+                          return (
+                            <div key={submission.id} className="p-3 rounded-lg border">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant={isAccepted ? 'default' : isPartial ? 'secondary' : 'destructive'}>
+                                    {submission.status}
+                                  </Badge>
+                                  {scorePercentage !== undefined && scorePercentage !== null && (
+                                    <span className={`text-xs font-semibold ${
+                                      scorePercentage === 100 ? 'text-green-600 dark:text-green-400' :
+                                      scorePercentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                                      'text-red-600 dark:text-red-400'
+                                    }`}>
+                                      {scorePercentage.toFixed(1)}%
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(submission.submitted_at).toLocaleTimeString()}
+                                </span>
+                              </div>
+                              <div className="space-y-1 text-xs text-muted-foreground">
+                                <div>Language: {LANGUAGE_MAP[submission.language]?.label}</div>
+                                {submission.passed_test_cases !== undefined && submission.total_test_cases !== undefined && (
+                                  <div>Test Cases: {submission.passed_test_cases}/{submission.total_test_cases} passed</div>
+                                )}
+                                {submission.runtime && (
+                                  <div>Runtime: {submission.runtime}ms</div>
+                                )}
+                              </div>
                             </div>
-                            <div className="space-y-1 text-xs text-muted-foreground">
-                              <div>Language: {LANGUAGE_MAP[submission.language]?.label}</div>
-                              {submission.runtime && (
-                                <div>Runtime: {submission.runtime}ms</div>
-                              )}
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </ScrollArea>
@@ -690,6 +784,31 @@ export default function CodingTest() {
             </Tabs>
           </Card>
         </div>
+      </div>
+
+      {/* Proctoring Notice */}
+      <div className="h-8 flex items-center justify-center gap-2 text-xs text-muted-foreground border-t border-border/50 bg-muted/20 flex-shrink-0">
+        <AlertCircle className="h-3.5 w-3.5" />
+        <span>
+          This assessment is monitored. Please do not switch tabs or windows.
+        </span>
+      </div>
+
+      {/* Monitoring Panel - Left Side */}
+      <div className="fixed bottom-4 left-4 z-50 flex gap-3">
+        {/* Webcam Monitor */}
+        <WebcamMonitor
+          ref={videoRef}
+          stream={stream}
+          status={proctorStatus}
+          className=""
+        />
+
+        {/* Activity Monitor */}
+        <ActivityMonitor
+          className="w-64"
+          onViolation={logViolation}
+        />
       </div>
     </div>
   );

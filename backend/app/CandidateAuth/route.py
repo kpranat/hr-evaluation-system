@@ -99,6 +99,13 @@ def login():
                 'message': 'Invalid email or password'
             }), 401
         
+        # Check if candidate has completed all assessments
+        if candidate.coding_completed:
+            return jsonify({
+                'success': False,
+                'message': 'Assessment already completed. You cannot login again.'
+            }), 403
+        
         # Generate JWT token with candidate information
         token_payload = {
             'user_id': candidate.id,

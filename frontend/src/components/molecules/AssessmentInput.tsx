@@ -98,34 +98,6 @@ export function AssessmentInput({
         );
     }
 
-    // Render Text Interface
-    if (question.type === 'text') {
-        const charCount = (answer as string)?.length || 0;
-
-        return (
-            <div className="h-full flex flex-col p-6 max-w-3xl mx-auto w-full">
-                <h3 className="text-lg font-medium mb-4">Your Answer:</h3>
-                <Card className="flex-1 p-2 flex flex-col">
-                    <Textarea
-                        value={answer as string || ''}
-                        onChange={(e) => onAnswerChange(e.target.value)}
-                        placeholder={question.placeholder}
-                        className="flex-1 resize-none border-0 focus-visible:ring-0 text-base leading-relaxed p-4"
-                        maxLength={question.maxLength}
-                    />
-                    <div className="p-2 text-right text-xs text-muted-foreground border-t">
-                        {charCount} / {question.maxLength} characters
-                    </div>
-                </Card>
-                <div className="mt-6 flex justify-end">
-                    <Button onClick={onSubmit} size="lg" disabled={charCount === 0}>
-                        Submit Response
-                    </Button>
-                </div>
-            </div>
-        );
-    }
-
     // Render Rating/Slider Interface
     if (question.type === 'rating') {
         return (
@@ -156,6 +128,36 @@ export function AssessmentInput({
                         </Button>
                     </div>
                 </Card>
+            </div>
+        );
+    }
+
+    // Render Text Interface (for question.type === 'text' or text-based questions from DB without type)
+    // Text-based questions from API have question_id and question fields but no type/options
+    const isTextBased = question.type === 'text' || (!question.type && !question.options && question.question_id);
+    if (isTextBased) {
+        const wordCount = (answer as string)?.split(/\s+/).filter(word => word.length > 0).length || 0;
+        const maxWords = 200;
+
+        return (
+            <div className="h-full flex flex-col p-6 max-w-3xl mx-auto w-full">
+                <h3 className="text-lg font-medium mb-4">Your Answer:</h3>
+                <Card className="flex-1 p-2 flex flex-col">
+                    <Textarea
+                        value={answer as string || ''}
+                        onChange={(e) => onAnswerChange(e.target.value)}
+                        placeholder="Type your answer here..."
+                        className="flex-1 resize-none border-0 focus-visible:ring-0 text-base leading-relaxed p-4"
+                    />
+                    <div className="p-2 text-right text-xs text-muted-foreground border-t">
+                        {wordCount} / {maxWords} words
+                    </div>
+                </Card>
+                <div className="mt-6 flex justify-end">
+                    <Button onClick={onSubmit} size="lg" disabled={wordCount === 0}>
+                        Submit Response
+                    </Button>
+                </div>
             </div>
         );
     }

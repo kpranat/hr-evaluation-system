@@ -28,7 +28,7 @@ import { AssessmentQuestion } from '@/types/assessment';
 import { AssessmentRound, ROUND_CONFIGS, ROUND_ORDER, RoundProgress } from '@/types/rounds';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { mcqApi, candidateApi, psychometricApi } from '@/lib/api';
+import { mcqApi, candidateApi, psychometricApi, textBasedApi } from '@/lib/api';
 import { useProctoring } from '@/hooks/useProctoring';
 import { useFaceDetection, ViolationEvent } from '@/hooks/useFaceDetection';
 import { useObjectDetection } from '@/hooks/useObjectDetection';
@@ -43,7 +43,6 @@ interface ConsoleLog {
 const ROUND_ICONS = {
   mcq: CheckSquare,
   psychometric: Brain,
-  technical: Code,
   'text-based': FileText,
   coding: Code
 };
@@ -74,6 +73,9 @@ export default function Assessment() {
   const [psychometricQuestions, setPsychometricQuestions] = useState<any[]>([]);
   const [psychometricQuestionsReady, setPsychometricQuestionsReady] = useState(false);
   const [psychometricSubmitting, setPsychometricSubmitting] = useState(false);
+
+  // Text-Based specific state - real questions from API
+  const [textBasedQuestions, setTextBasedQuestions] = useState<any[]>([]);
 
   // Question State
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -140,6 +142,20 @@ export default function Assessment() {
   useEffect(() => {
     if (currentRound === 'psychometric' && psychometricQuestions.length === 0) {
       loadPsychometricQuestions();
+    }
+  }, [currentRound]);
+
+  // Load Text-Based questions when on text-based round
+  useEffect(() => {
+    if (currentRound === 'text-based' && textBasedQuestions.length === 0) {
+      loadTextBasedQuestions();
+    }
+  }, [currentRound]);
+
+  // Load Text-Based questions when on text-based round
+  useEffect(() => {
+    if (currentRound === 'text-based' && textBasedQuestions.length === 0) {
+      loadTextBasedQuestions();
     }
   }, [currentRound]);
 
@@ -267,7 +283,30 @@ export default function Assessment() {
       addLog('error', 'Failed to load psychometric questions');
     }
   };
+  const loadTextBasedQuestions = async () => {
+    try {
+      console.log('📥 Loading Text-Based questions from API...');
+      const response = await textBasedApi.getQuestions();
 
+      if (response.error) {
+        console.error('❌ Error loading Text-Based questions:', response.error);
+        addLog('error', `Failed to load Text-Based questions: ${response.error}`);
+        return;
+      }
+
+      if ((response.data as any)?.questions && (response.data as any).questions.length > 0) {
+        console.log(`✅ Loaded ${(response.data as any).questions.length} Text-Based questions`);
+        setTextBasedQuestions((response.data as any).questions);
+        addLog('success', `Loaded ${(response.data as any).questions.length} Text-Based questions`);
+      } else {
+        console.warn('⚠️ No Text-Based questions available');
+        addLog('error', 'No Text-Based questions available. Please contact administrator.');
+      }
+    } catch (error) {
+      console.error('❌ Exception loading Text-Based questions:', error);
+      addLog('error', 'Failed to load Text-Based questions');
+    }
+  };
   // Check candidate status and round completion on mount
   useEffect(() => {
     const checkCandidateStatus = async () => {
@@ -330,7 +369,9 @@ export default function Assessment() {
     ? mcqQuestions
     : currentRound === 'psychometric' && psychometricQuestions.length > 0
       ? psychometricQuestions
-      : questionsByRound[currentRound];
+      : currentRound === 'text-based' && textBasedQuestions.length > 0
+        ? textBasedQuestions
+        : questionsByRound[currentRound] || [];
   const currentQuestion: any = currentRoundQuestions[currentQuestionIndex];
   const totalQuestions = currentRoundQuestions.length;
   const currentAnswer = roundProgress[currentRound].answers[currentQuestion?.question_id || currentQuestion?.id];
@@ -471,16 +512,7 @@ export default function Assessment() {
     if (currentIdx < ROUND_ORDER.length - 1) {
       const nextRound = ROUND_ORDER[currentIdx + 1];
 
-      // If next round is text-based, redirect to dedicated page
-      if (nextRound === 'text-based') {
-        addLog('success', 'Moving to Text-Based Assessment...');
-        setTimeout(() => {
-          navigate('/candidate/text-based-test');
-        }, 1500);
-        return;
-      }
-
-      // If next round is coding, redirect to dedicated page
+      // If next round is coding, redirect to dedicated page (has complex UI with Monaco editor)
       if (nextRound === 'coding') {
         addLog('success', 'Moving to Coding Assessment...');
         setTimeout(() => {
@@ -598,6 +630,48 @@ export default function Assessment() {
       return;
     }
 
+    // Handle Text-Based submission - save to backend
+    if (currentRound === 'text-based' && textBasedQuestions.length > 0) {
+      const answerText = currentAnswer;
+
+      if (!answerText || !answerText.trim()) {
+        addLog('error', 'Please provide an answer before submitting');
+        return;
+      }
+
+      try {
+        addLog('info', 'Submitting answer...');
+        const response = await textBasedApi.submitAnswer(
+          currentQuestion.question_id,
+          answerText
+        );
+
+        if (response.error) {
+          addLog('error', `Failed to submit: ${response.error}`);
+          return;
+        }
+
+        addLog('success', 'Answer saved successfully');
+        
+        // Move to next question or complete round
+        if (currentQuestionIndex < totalQuestions - 1) {
+          handleNext();
+        } else {
+          // Text-based round completed
+          await textBasedApi.complete();
+          await completeCurrentRound();
+          addLog('success', 'Text-Based assessment completed! Moving to next round...');
+          setTimeout(() => {
+            moveToNextRound();
+          }, 500);
+        }
+      } catch (error) {
+        addLog('error', 'Failed to submit answer');
+        console.error('Submit error:', error);
+      }
+      return;
+    }
+
     // Handle other question types
     if (currentQuestion.type === 'coding') {
       handleRunCode();
@@ -653,6 +727,19 @@ export default function Assessment() {
           "Describe yourself as you generally are now, not as you wish to be in the future.",
           "Answer honestly in relation to other people you know of the same age.",
           "Select the option that best describes you."
+        ]
+      };
+    }
+
+    // Handle Text-Based questions from API
+    if (currentRound === 'text-based' && textBasedQuestions.length > 0) {
+      return {
+        problemTitle: `Question ${currentQuestionIndex + 1} of ${totalQuestions}`,
+        problemDescription: currentQuestion.question,
+        instructions: [
+          "Provide a detailed and thoughtful answer.",
+          "Maximum 200 words allowed.",
+          "Your answer will be evaluated for clarity and depth."
         ]
       };
     }

@@ -281,9 +281,35 @@ export const questionsByRound: Record<AssessmentRound, AssessmentQuestion[]> = {
             maxLabel: 'Excellent at decomposition'
         }
     ],
-    technical: [
+    'text-based': [
         {
-            id: 301,
+            id: 303,
+            type: 'text',
+            title: 'System Design: Rate Limiter',
+            description: 'Describe how you would design a rate limiter for a high-traffic API. What algorithms would you consider (token bucket, leaky bucket, fixed window, sliding window)? What trade-offs would you make regarding precision vs. performance?',
+            maxLength: 1000,
+            placeholder: 'Explain your design approach...'
+        },
+        {
+            id: 305,
+            type: 'text',
+            title: 'Architecture Decision',
+            description: 'You need to choose between a monolithic architecture and microservices for a new e-commerce platform. Explain your reasoning and the factors you would consider.',
+            maxLength: 800,
+            placeholder: 'Share your analysis...'
+        },
+        {
+            id: 306,
+            type: 'text',
+            title: 'Database Selection',
+            description: 'Compare SQL and NoSQL databases. In what scenarios would you choose one over the other? Provide specific examples.',
+            maxLength: 600,
+            placeholder: 'Explain your perspective...'
+        }
+    ],
+    coding: [
+        {
+            id: 401,
             type: 'coding',
             title: 'Two Sum',
             description: 'Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.',
@@ -301,7 +327,7 @@ export const questionsByRound: Record<AssessmentRound, AssessmentQuestion[]> = {
             ]
         },
         {
-            id: 302,
+            id: 402,
             type: 'coding',
             title: 'Valid Palindrome',
             description: 'A phrase is a **palindrome** if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward.\n\nGiven a string `s`, return `true` if it is a palindrome, or `false` otherwise.',
@@ -317,15 +343,7 @@ export const questionsByRound: Record<AssessmentRound, AssessmentQuestion[]> = {
             ]
         },
         {
-            id: 303,
-            type: 'text',
-            title: 'System Design: Rate Limiter',
-            description: 'Describe how you would design a rate limiter for a high-traffic API. What algorithms would you consider (token bucket, leaky bucket, fixed window, sliding window)? What trade-offs would you make regarding precision vs. performance?',
-            maxLength: 1000,
-            placeholder: 'Explain your design approach...'
-        },
-        {
-            id: 304,
+            id: 403,
             type: 'coding',
             title: 'Reverse Linked List',
             description: 'Given the head of a singly linked list, reverse the list, and return the reversed list.',
