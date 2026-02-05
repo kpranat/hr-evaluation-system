@@ -23,17 +23,12 @@ export function useProctoring({ assessmentId, onViolation }: UseProctoringProps 
 
     const monitorInterval = useRef<NodeJS.Timeout | null>(null);
 
-    // Local violation counts (Client-side aggregation)
-    const violationCountsRef = useRef<Record<string, number>>({
-        no_face: 0,
-        multiple_faces: 0,
-        looking_away: 0,
-        phone_detected: 0,
-        tab_switch: 0,
-        mouse_exit: 0,
-        print_screen: 0,
-        copy_paste: 0
-    });
+    // Local violation events array (stores each event with timestamp and details)
+    const violationEventsRef = useRef<Array<{
+        type: string;
+        timestamp: string;
+        details?: any;
+    }>>([]);
 
     const startSession = useCallback(async () => {
         setIsMonitoring(true);
@@ -53,17 +48,8 @@ export function useProctoring({ assessmentId, onViolation }: UseProctoringProps 
             if (response.ok) {
                 const data = await response.json();
                 setSessionId(data.session_id);
-                // Reset counts on new session
-                violationCountsRef.current = {
-                    no_face: 0,
-                    multiple_faces: 0,
-                    looking_away: 0,
-                    phone_detected: 0,
-                    tab_switch: 0,
-                    mouse_exit: 0,
-                    print_screen: 0,
-                    copy_paste: 0
-                };
+                // Reset events array on new session
+                violationEventsRef.current = [];
                 setStatus('active');
                 return data.session_id;
             } else {
@@ -86,8 +72,8 @@ export function useProctoring({ assessmentId, onViolation }: UseProctoringProps 
         }
 
         try {
-            // Send FINAL updated counts to backend
-            console.log('📝 Submitting Proctored Session. Final Counts:', violationCountsRef.current);
+            // Send all violation events to backend
+            console.log('📝 Submitting Proctored Session. Total Events:', violationEventsRef.current.length);
             const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
             await fetch(`${API_URL}/api/proctor/session/end`, {
                 method: 'POST',
@@ -97,7 +83,7 @@ export function useProctoring({ assessmentId, onViolation }: UseProctoringProps 
                 },
                 body: JSON.stringify({
                     session_id: sessionId,
-                    violation_counts: violationCountsRef.current // Send the aggregated counts
+                    violation_events: violationEventsRef.current // Send the detailed events array
                 })
             });
 
@@ -109,19 +95,19 @@ export function useProctoring({ assessmentId, onViolation }: UseProctoringProps 
 
     const logViolation = useCallback(async (violationType: string, violationData: any) => {
         if (!sessionId) {
-            console.warn(`[Proctor Warning] Attempted to log '${violationType}' but sessionId is missing! violationCounts not updated.`);
+            console.warn(`[Proctor Warning] Attempted to log '${violationType}' but sessionId is missing!`);
             return;
         }
 
-        // Client-side aggregation ONLY
-        if (violationCountsRef.current[violationType] !== undefined) {
-            violationCountsRef.current[violationType] = (violationCountsRef.current[violationType] || 0) + 1;
-        } else {
-            // Handle unknown types safely
-            violationCountsRef.current[violationType] = 1;
-        }
-
-        console.log(`[Proctor Local Log] ${violationType} count: ${violationCountsRef.current[violationType]}`);
+        // Store event with timestamp and details
+        const event = {
+            type: violationType,
+            timestamp: new Date().toISOString(),
+            details: violationData
+        };
+        
+        violationEventsRef.current.push(event);
+        console.log(`[Proctor Event Logged] ${violationType} at ${event.timestamp}`);
     }, [sessionId]);
 
     const analyzeFrame = useCallback(async (base64Image: string) => {

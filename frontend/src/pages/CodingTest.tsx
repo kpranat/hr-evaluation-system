@@ -116,12 +116,23 @@ export default function CodingTest() {
   // Client-Side Face Detection
   const { stream } = useFaceDetection({
     enabled: isMonitoring,
-    detectionInterval: 500,
+    detectionInterval: 2000, // Check every 2 seconds
     onViolation: (event: ViolationEvent) => {
       const { type, details } = event;
-      console.log(`🚨 Proctoring violation: ${type}`, details);
-      toast.error(`Security Alert: ${type.replace('_', ' ')}`);
-      logViolation(type, details);
+      
+      // Map violation types to backend format
+      const violationTypeMap: Record<string, string> = {
+        'NO_FACE': 'no_face',
+        'MULTIPLE_FACES': 'multiple_faces',
+        'FACE_TURNED': 'looking_away',
+        'FACE_TOO_FAR': 'looking_away'
+      };
+      
+      const backendType = violationTypeMap[type] || type.toLowerCase();
+      
+      console.log(`🚨 Face detection violation: ${backendType}`, details);
+      toast.error(`Security Alert: ${details}`);
+      logViolation(backendType, { event: type, details });
     }
   });
 

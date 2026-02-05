@@ -53,9 +53,9 @@ def verify_candidate_token():
 @ProctorService.route('/session/start', methods=['POST'])
 def start_session():
     try:
-        user_id = verify_candidate_token()
-        if not user_id:
-            return jsonify({'error': 'Unauthorized'}), 401
+        user_id, error = verify_candidate_token()
+        if error:
+            return error
             
         data = request.json or {}
         assessment_id = data.get('assessment_id')
@@ -91,9 +91,9 @@ def start_session():
 @ProctorService.route('/session/end', methods=['POST'])
 def end_session():
     try:
-        user_id = verify_candidate_token()
-        if not user_id:
-            return jsonify({'error': 'Unauthorized'}), 401
+        user_id, error = verify_candidate_token()
+        if error:
+            return error
             
         # Find active session for this user
         session = ProctorSession.query.filter_by(
@@ -105,34 +105,29 @@ def end_session():
             # If no active session, just return success (idempotent)
             return jsonify({'success': True, 'message': 'No active session found'})
             
-        # Get counts from request payload
-        counts = request.json.get('violation_counts', {
-            "no_face": 0,
-            "multiple_faces": 0,
-            "looking_away": 0,
-            "phone_detected": 0,
-            "tab_switch": 0,
-            "mouse_exit": 0,
-            "print_screen": 0,
-            "copy_paste": 0
-        })
+        # Get violation events array from request payload
+        violation_events = request.json.get('violation_events', [])
         
-        # Verify it's a dict (basic validation)
-        if not isinstance(counts, dict):
-            counts = {}
+        # Verify it's a list (basic validation)
+        if not isinstance(violation_events, list):
+            violation_events = []
 
-        # Update session
-        session.violation_counts = counts
+        # Update session with detailed events
+        session.violation_counts = {
+            'events': violation_events,
+            'total_count': len(violation_events)
+        }
         session.end_time = datetime.utcnow()
         session.status = 'completed'
         
         db.session.commit()
         
-        print(f"[PROCTOR] Session ended: {session.session_uuid}. Final Counts: {counts}")
+        print(f"[PROCTOR] Session ended: {session.session_uuid}. Total Events: {len(violation_events)}")
         
         return jsonify({
             'success': True,
-            'violation_counts': counts
+            'total_events': len(violation_events),
+            'events_stored': True
         })
     except Exception as e:
         import traceback
@@ -221,9 +216,9 @@ def log_violation():
 
 @ProctorService.route('/analyze-frame', methods=['POST'])
 def analyze_frame():
-    user_id = verify_candidate_token()
-    if not user_id:
-        return jsonify({'error': 'Unauthorized'}), 401
+    user_id, error = verify_candidate_token()
+    if error:
+        return error
         
     data = request.json
     session_id = data.get('session_id')

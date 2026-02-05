@@ -55,9 +55,62 @@ export function useFaceDetection({
 
         // Start face detection
         if (enabled) {
-          detectionIntervalId = setInterval(() => {
-            // Placeholder for actual face detection logic
-            // In production, you would use face-api.js or similar library here
+          detectionIntervalId = setInterval(async () => {
+            if (!videoRef.current || !isMounted) return;
+            
+            try {
+              // Capture frame from video
+              const canvas = document.createElement('canvas');
+              canvas.width = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+              const ctx = canvas.getContext('2d');
+              
+              if (!ctx) return;
+              
+              ctx.drawImage(videoRef.current, 0, 0);
+              const base64Image = canvas.toDataURL('image/jpeg', 0.6);
+              
+              // Send to backend for analysis
+              const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/proctor/analyze-frame`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${localStorage.getItem('candidate_token')}`
+                },
+                body: JSON.stringify({
+                  image: base64Image
+                })
+              });
+              
+              const data = await response.json();
+              
+              if (data.success && data.analysis) {
+                const analysis = data.analysis;
+                
+                // Check for violations and call onViolation callback
+                if (!analysis.face_detected) {
+                  console.log('🚨 No face detected');
+                  onViolationRef.current({
+                    type: 'NO_FACE',
+                    details: 'No face detected in frame'
+                  });
+                } else if (analysis.multiple_faces) {
+                  console.log('🚨 Multiple faces detected');
+                  onViolationRef.current({
+                    type: 'MULTIPLE_FACES',
+                    details: 'Multiple people detected'
+                  });
+                } else if (analysis.looking_away) {
+                  console.log('🚨 Looking away detected');
+                  onViolationRef.current({
+                    type: 'FACE_TURNED',
+                    details: 'Candidate looking away from screen'
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Face detection error:', error);
+            }
           }, detectionInterval);
         }
       } catch (error) {
