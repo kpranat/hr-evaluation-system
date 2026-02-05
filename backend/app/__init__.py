@@ -54,6 +54,14 @@ def create_app():
     # Text-based assessment routes
     from .TextBased import TextBased
     app.register_blueprint(TextBased, url_prefix='/api/text-based')
+    
+    # Proctor monitoring routes
+    from .ProctorService import ProctorService
+    app.register_blueprint(ProctorService, url_prefix='/api/proctor')
+    
+    # Playback service routes
+    from .PlaybackService import PlaybackService
+    app.register_blueprint(PlaybackService, url_prefix='/api/playback')
 
     # Import models before creating tables
     from . import models

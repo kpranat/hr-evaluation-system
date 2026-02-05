@@ -273,3 +273,77 @@ class TextBasedAnswer(db.Model):
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
+#====================== Proctor Session ============================
+class ProctorSession(db.Model):
+    __tablename__ = 'proctor_sessions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    candidate_id = db.Column(db.Integer, db.ForeignKey('candidate_auth.id'), nullable=False)
+    assessment_id = db.Column(db.String(100), nullable=True)  # ID of the assessment being monitored
+    start_time = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    end_time = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='active')  # active, completed, terminated
+    
+    # Relationship to candidate
+    candidate = db.relationship('CandidateAuth', backref=db.backref('proctor_sessions'))
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'candidate_id': self.candidate_id,
+            'assessment_id': self.assessment_id,
+            'start_time': self.start_time.isoformat() if self.start_time else None,
+            'end_time': self.end_time.isoformat() if self.end_time else None,
+            'status': self.status
+        }
+
+#====================== Proctor Event ============================
+class ProctorEvent(db.Model):
+    __tablename__ = 'proctor_events'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('proctor_sessions.id'), nullable=False)
+    event_type = db.Column(db.String(50), nullable=False)  # multiple_faces, no_face, looking_away, phone_detected, tab_switch, etc.
+    details = db.Column(db.Text, nullable=True)  # JSON or text details about the event
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationship to session
+    session = db.relationship('ProctorSession', backref=db.backref('events'))
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'session_id': self.session_id,
+            'event_type': self.event_type,
+            'details': self.details,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+        }
+
+#====================== Code Playback Recording ============================
+class CodePlayback(db.Model):
+    __tablename__ = 'code_playback'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, nullable=False)  # Reference to proctor session or assessment session
+    question_id = db.Column(db.Integer, nullable=False)  # Question being answered
+    events = db.Column(db.Text, nullable=False)  # JSON array of keystroke/code change events
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Unique constraint: one playback log per session per question
+    __table_args__ = (db.UniqueConstraint('session_id', 'question_id', name='_session_question_playback_uc'),)
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'session_id': self.session_id,
+            'question_id': self.question_id,
+            'events': self.events,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+

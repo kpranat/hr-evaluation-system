@@ -116,9 +116,16 @@ export function WebcamMonitor({ className, onFrameCapture, status: externalStatu
       borderColor: 'border-destructive/30',
       icon: AlertCircle,
     },
+    idle: {
+      label: 'Standby',
+      color: 'text-muted-foreground',
+      bgColor: 'bg-muted/10',
+      borderColor: 'border-muted/30',
+      icon: Video,
+    },
   };
 
-  const currentStatus = statusConfig[status];
+  const currentStatus = statusConfig[status] || statusConfig.idle;
   const StatusIcon = currentStatus.icon;
 
   if (isMinimized) {
