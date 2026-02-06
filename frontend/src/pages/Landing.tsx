@@ -2,23 +2,37 @@ import { useNavigate } from 'react-router-dom';
 import { Users, Code, ArrowRight, Shield } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import DarkVeil from '@/components/animations/DarkVeil';
 
 export default function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-6 animate-fade-in">
-      <div className="max-w-5xl w-full space-y-12 text-center">
+    <div className="relative min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-6 animate-fade-in overflow-hidden">
+
+      {/* 3D Background Animation */}
+      <div className="absolute inset-0 z-0 opacity-40">
+        <DarkVeil
+          hueShift={11}
+          noiseIntensity={0}
+          scanlineIntensity={0.22}
+          speed={0.5}
+          scanlineFrequency={1.6}
+          warpAmount={2}
+        />
+      </div>
+
+      <div className="max-w-5xl w-full space-y-12 text-center relative z-10">
         {/* Hero Section */}
         <div className="space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium backdrop-blur-sm border border-primary/20">
             <Shield className="h-4 w-4" />
             AI-Enabled Evaluation Platform
           </div>
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
             Welcome to <span className="gradient-text">Cygnusa</span>
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto backdrop-blur-sm bg-background/30 p-4 rounded-lg">
             A zero-cost, automated hiring platform that combines technical assessment with AI-driven integrity monitoring.
           </p>
         </div>
@@ -27,7 +41,7 @@ export default function Landing() {
         <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
           {/* Candidate Card */}
           <Card
-            className="group relative overflow-hidden p-8 hover:border-primary/50 transition-all duration-300 hover:shadow-lg cursor-pointer text-left"
+            className="group relative overflow-hidden p-8 hover:border-primary/50 transition-all duration-300 hover:shadow-lg cursor-pointer text-left bg-card/80 backdrop-blur-md"
             onClick={() => navigate('/candidate/login')}
           >
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -52,7 +66,7 @@ export default function Landing() {
 
           {/* Recruiter Card */}
           <Card
-            className="group relative overflow-hidden p-8 hover:border-purple-500/50 transition-all duration-300 hover:shadow-lg cursor-pointer text-left"
+            className="group relative overflow-hidden p-8 hover:border-purple-500/50 transition-all duration-300 hover:shadow-lg cursor-pointer text-left bg-card/80 backdrop-blur-md"
             onClick={() => navigate('/recruiter/login')}
           >
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
