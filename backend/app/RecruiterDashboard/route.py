@@ -5,7 +5,7 @@ Handles all recruiter dashboard operations
 
 from flask import request, jsonify
 from . import RecruiterDashboard
-from ..models import CandidateAuth, MCQQuestion, EvaluationCriteria
+from ..models import CandidateAuth, MCQQuestion, EvaluationCriteria, ProctorSession, MCQResult, PsychometricResult, TextAssessmentResult, CandidateRationale, CodingAssessmentResult
 from ..extensions import db
 from ..config import Config
 from ..auth_helpers import verify_recruiter_token
@@ -765,16 +765,29 @@ def get_candidates():
             # Psychometric is NOT included in overall score anymore
             
             # Calculate fairplay score (from Proctoring Violations)
-            violations = ProctoringViolation.query.filter_by(candidate_id=candidate.id).all()
+            # Fetch latest session for candidate
+            session = ProctorSession.query.filter_by(candidate_id=candidate.id).order_by(ProctorSession.start_time.desc()).first()
             fairplay_score = 100  # Start with perfect score
-            for violation in violations:
-                # Deduct points based on severity
-                if violation.severity == 'high':
-                    fairplay_score -= 15
-                elif violation.severity == 'medium':
-                    fairplay_score -= 8
-                else:  # low
-                    fairplay_score -= 3
+            
+            if session and session.violation_counts:
+                raw_data = session.violation_counts
+                if "summary" in raw_data:
+                    counts = raw_data["summary"]
+                else:
+                    counts = raw_data
+                    
+                # Deduct points based on counts from JSON
+                # Weights: Phone/Face (High) = -15, Tab/Look (Medium) = -8
+                
+                # High Severity
+                fairplay_score -= (counts.get('phone_detected', 0) * 15)
+                fairplay_score -= (counts.get('multiple_faces', 0) * 15)
+                fairplay_score -= (counts.get('no_face', 0) * 15)
+                
+                # Medium Severity
+                fairplay_score -= (counts.get('tab_switch', 0) * 8)
+                fairplay_score -= (counts.get('looking_away', 0) * 8)
+                
             fairplay_score = max(0, fairplay_score)  # Don't go below 0
             
             # Check if at least one assessment is completed
@@ -930,7 +943,7 @@ def get_candidate_detail(candidate_id):
         return error
     
     try:
-        from ..models import MCQResult, PsychometricResult, TextBasedAnswer, ProctoringViolation, TextAssessmentResult, CandidateRationale
+        from ..models import MCQResult, PsychometricResult, TextBasedAnswer, ProctoringViolation, TextAssessmentResult, CandidateRationale, ProctorSession
         
         # Get candidate
         candidate = CandidateAuth.query.get(candidate_id)
@@ -987,28 +1000,175 @@ def get_candidate_detail(candidate_id):
         # Calculate Soft Skill Score from Text Assessment Results
         text_result = db.session.query(TextAssessmentResult).filter_by(candidate_id=candidate.id).first()
         if text_result and text_result.grading_json:
-            soft_skill_score = text_result.grading_json.get('communication_score', 0)
+            # Try to get communication_score directly (new format)
+            soft_skill_score = text_result.grading_json.get('communication_score', None)
+            
+            # Fallback: if only 'remark' exists (old format), give a base score
+            if soft_skill_score is None:
+                if 'remark' in text_result.grading_json and text_result.grading_json['remark']:
+                    soft_skill_score = 50  # Default mid-score for old data that was graded
+                else:
+                    soft_skill_score = 0
         else:
-            soft_skill_score = 0
+            # No grading yet - check if answers exist
+            answer_count = TextBasedAnswer.query.filter_by(student_id=candidate.id).count()
+            if answer_count > 0:
+                # Has answers but not graded yet - give partial credit
+                soft_skill_score = 40  # Submitted but not graded
+            else:
+                soft_skill_score = 0
         
-        # Get Proctoring violations
-        violations = ProctoringViolation.query.filter_by(candidate_id=candidate.id).all()
+        # Get Proctoring violations from ProctorSession.violation_counts JSON
+        session = ProctorSession.query.filter_by(candidate_id=candidate.id).order_by(ProctorSession.start_time.desc()).first()
         fairplay_score = 100
         integrity_logs = []
-        for violation in violations:
-            if violation.severity == 'high':
-                fairplay_score -= 15
-            elif violation.severity == 'medium':
-                fairplay_score -= 8
-            else:
-                fairplay_score -= 3
+        integrity_status = "Clean"  # Clean, Moderate, Severe
+        
+        if session and session.violation_counts:
+            raw_data = session.violation_counts
             
-            integrity_logs.append({
-                'timestamp': violation.timestamp.strftime('%I:%M %p') if violation.timestamp else 'N/A',
-                'event': violation.violation_type.replace('_', ' ').title(),
-                'severity': violation.severity
-            })
-        fairplay_score = max(0, fairplay_score)
+            # Get summary counts for fairplay score calculation
+            if "summary" in raw_data:
+                counts = raw_data["summary"]
+            else:
+                counts = raw_data
+            
+            # Extract violation counts
+            no_face = counts.get('no_face', 0)
+            multiple_faces = counts.get('multiple_faces', 0)
+            mouse_exit = counts.get('mouse_exit', 0)
+            tab_switch = counts.get('tab_switch', 0)
+            looking_away = counts.get('looking_away', 0)
+            phone_detected = counts.get('phone_detected', 0)
+            print_screen = counts.get('print_screen', 0)
+            copy_paste = counts.get('copy_paste', 0)
+            
+            # ==========================================
+            # INTEGRITY SCORING FORMULA v1.0
+            # ==========================================
+            # 
+            # SEVERITY THRESHOLDS:
+            # - SEVERE (Auto-Flag, Major Deduction):
+            #     * Multiple Faces >= 2
+            #     * No Face >= 15 (camera not capturing face for extended period)
+            #     * Phone Detected >= 1 (any phone = serious cheating attempt)
+            #     * Print Screen >= 2 (attempt to capture questions)
+            # 
+            # - MODERATE (Warning, Medium Deduction):
+            #     * No Face 10-14
+            #     * Mouse Exit >= 10
+            #     * Tab Switch >= 5
+            #     * Copy/Paste >= 3
+            # 
+            # - LIGHT (Minor, Small Deduction):
+            #     * Looking Away >= 10
+            #     * Mouse Exit 1-9
+            #     * Tab Switch 1-4
+            #
+            # FORMULA:
+            # Base Score = 100
+            # Deductions:
+            #   SEVERE events: -25 per category triggered
+            #   MODERATE events: -15 per category triggered  
+            #   LIGHT events: -5 per category triggered
+            #   + Per-instance penalties for high volume
+            # ==========================================
+            
+            severe_flags = 0
+            moderate_flags = 0
+            light_flags = 0
+            
+            # Check SEVERE conditions
+            if multiple_faces >= 2:
+                severe_flags += 1
+            if no_face >= 15:
+                severe_flags += 1
+            if phone_detected >= 1:
+                severe_flags += 1
+            if print_screen >= 2:
+                severe_flags += 1
+            
+            # Check MODERATE conditions
+            if 10 <= no_face < 15:
+                moderate_flags += 1
+            if mouse_exit >= 10:
+                moderate_flags += 1
+            if tab_switch >= 5:
+                moderate_flags += 1
+            if copy_paste >= 3:
+                moderate_flags += 1
+            if 1 <= multiple_faces < 2:  # 1 occurrence is moderate
+                moderate_flags += 1
+            
+            # Check LIGHT conditions
+            if looking_away >= 10:
+                light_flags += 1
+            if 1 <= mouse_exit < 10:
+                light_flags += 1
+            if 1 <= tab_switch < 5:
+                light_flags += 1
+            if 1 <= no_face < 10:
+                light_flags += 1
+            
+            # Apply deductions
+            fairplay_score -= (severe_flags * 25)
+            fairplay_score -= (moderate_flags * 15)
+            fairplay_score -= (light_flags * 5)
+            
+            # Additional per-instance penalties for high volumes
+            # (to differentiate between barely crossing threshold vs. extreme violation)
+            if no_face > 15:
+                fairplay_score -= (no_face - 15) * 2  # -2 per extra no_face beyond 15
+            if mouse_exit > 10:
+                fairplay_score -= (mouse_exit - 10) * 1  # -1 per extra mouse_exit beyond 10
+            if tab_switch > 5:
+                fairplay_score -= (tab_switch - 5) * 2  # -2 per extra tab_switch beyond 5
+            
+            # Determine overall status
+            if severe_flags > 0:
+                integrity_status = "Severe"
+            elif moderate_flags > 0:
+                integrity_status = "Moderate"
+            elif light_flags > 0:
+                integrity_status = "Light"
+            else:
+                integrity_status = "Clean"
+            
+            # Get events list for integrity logs display
+            events = raw_data.get("events", [])
+            
+            # Dynamic severity based on thresholds (not just event type)
+            for evt in events:
+                etype = evt.get('type', 'unknown')
+                ts_str = evt.get('timestamp', '')
+                
+                # Format timestamp for display
+                try:
+                    from datetime import datetime
+                    ts = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+                    formatted_ts = ts.strftime('%I:%M %p')
+                except:
+                    formatted_ts = ts_str[:8] if ts_str else 'N/A'
+                
+                # Assign severity based on event type and thresholds
+                if etype in ['phone_detected', 'print_screen']:
+                    evt_severity = 'high'
+                elif etype == 'multiple_faces':
+                    evt_severity = 'high' if multiple_faces >= 2 else 'medium'
+                elif etype == 'no_face':
+                    evt_severity = 'high' if no_face >= 15 else ('medium' if no_face >= 10 else 'low')
+                elif etype in ['tab_switch', 'copy_paste']:
+                    evt_severity = 'medium'
+                else:
+                    evt_severity = 'low'
+                
+                integrity_logs.append({
+                    'timestamp': formatted_ts,
+                    'event': etype.replace('_', ' ').title(),
+                    'severity': evt_severity
+                })
+                
+        fairplay_score = max(0, min(100, fairplay_score))  # Clamp between 0-100
         
         # Calculate overall score (Technical 50%, Soft 30%, Fairplay 20%)
         # Psychometric is excluded

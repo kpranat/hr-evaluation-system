@@ -6,10 +6,12 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app, db
-from app.models import CandidateAuth, MCQResult, PsychometricResult, TextAssessmentResult, CandidateRationale
+from app.models import CandidateAuth, MCQResult, PsychometricResult, TextAssessmentResult, CandidateRationale, CodingAssessmentResult, ProctorSession
 from services.placeholder_functions import client, clean_json_output
+from services.coding_result_to_grading import process_coding_grading
+from services.proctor_result_to_grading import process_proctor_grading
 
-def generate_final_rationale(resume_data, mcq_score, text_remark, psychometric_analysis):
+def generate_final_rationale(resume_data, mcq_score, text_remark, psychometric_analysis, coding_data, proctor_data):
     """
     Inputs: Data objects/dicts from previous steps.
     Output: JSON object with final verdict.
@@ -31,44 +33,70 @@ def generate_final_rationale(resume_data, mcq_score, text_remark, psychometric_a
     
     4. PSYCHOMETRIC TRAITS (For Reference Only - Do NOT grade pass/fail):
     {json.dumps(psychometric_analysis, indent=2) if isinstance(psychometric_analysis, dict) else psychometric_analysis}
+
+    5. CODING SKILLS (Sandbox Result):
+    {json.dumps(coding_data, indent=2) if isinstance(coding_data, dict) else coding_data}
+
+    6. PROCTORING / INTEGRITY (Malpractice Check):
+    {json.dumps(proctor_data, indent=2) if isinstance(proctor_data, dict) else proctor_data}
     
     INSTRUCTIONS:
     Analyze the candidate data to produce a Final Rationale Report.
     
     SCORING RULES:
-    - Technical Grade: Base heavily on the MCQ Score.
-    - Soft Skills Grade: Base heavily on the Text Assessment Score/Remarks.
-    - Psychometric: Provide insights on personality fit based on traits. Do NOT assign a "Poor" grade just because traits are average; treat them as neutral/informative unless extreme.
+    - Write each section as a DETAILED PARAGRAPH (3-5 sentences each).
+    - PRIORITIZE: Resume Fit -> describe why the resume fits or doesn't fit in detail.
+    - Coding Skills: Detailed analysis of coding performance, problems solved, code quality.
+    - Soft Skills: Detailed analysis of communication, clarity, professionalism from Text Assessment.
+    - Psychometric: Brief personality insight (2-3 sentences). Low priority for hiring decision.
+    
+    INTEGRITY RULES (IMPORTANT):
+    - If Integrity/Fairplay score is ABOVE 50: Do NOT penalize the candidate. Consider it acceptable.
+    - If Integrity/Fairplay score is BELOW 50: Mention this as an observation ONLY. Do NOT let it affect the hiring decision. Simply inform the recruiter that there were some concerns.
+    - NEVER reject a candidate solely based on integrity score. It is informational only.
+    
+    FORMAT REQUIREMENTS:
+    - Each section should be a FULL PARAGRAPH, not a single sentence.
+    - Use professional language and provide specific insights.
+    - Cite actual scores and data in your reasoning.
     
     CRITICALITY GUIDELINES:
     - Be fair: If a candidate has a good Technical Score (e.g. >70%), they should generally NOT be rated "Poor" overall unless Soft Skills are terrible.
     - Contextualize: High Technical + Low Soft Skills = Potential Individual Contributor. Low Technical + High Soft Skills = Potential Jr/Support role.
     
     TRANSPARENCY REQUIREMENT:
-    - In the "reasoning" for each section, explicitely cite the scores (e.g., "...given the Technical Score of 85%..." or "...Communication Score of 9/10...").
+    - In the "reasoning" for each section, explicitely cite the scores (e.g., "...given the Technical Score of 85%..." or "...Communication Score of 75/100...").
     
     OUTPUT FORMAT:
     Return ONLY valid JSON in the following format:
     {{
+        "resume_fit": {{
+            "grade": "Excellent" | "Good" | "Average" | "Poor",
+            "reasoning": "3-5 sentences. Detailed analysis of how well the resume matches the role requirements."
+        }},
         "technical_evaluation": {{
             "grade": "Excellent" | "Good" | "Average" | "Poor",
-            "reasoning": "1-2 sentences. Cite MCQ score."
+            "reasoning": "3-5 sentences. Detailed analysis of MCQ performance, knowledge areas, strengths and gaps."
+        }},
+        "coding_evaluation": {{
+            "grade": "Excellent" | "Good" | "Average" | "Poor",
+            "reasoning": "3-5 sentences. Detailed analysis of coding problems solved, approach, and code quality."
         }},
         "soft_skills_evaluation": {{
             "grade": "Excellent" | "Good" | "Average" | "Poor",
-            "reasoning": "1-2 sentences. Cite Text Assessment score."
+            "reasoning": "3-5 sentences. Detailed analysis of communication skills, clarity, and professionalism."
         }},
         "psychometric_evaluation": {{
             "grade": "Insight" | "Neutral",
-            "reasoning": "1-2 sentences on personality fit (Extraversion, etc.)."
+            "reasoning": "2-3 sentences. Brief personality insight - NOT a pass/fail judgment."
         }},
-        "resume_fit": {{
-            "grade": "Excellent" | "Good" | "Average" | "Poor",
-            "reasoning": "1-2 sentences."
+        "integrity_observation": {{
+            "status": "Acceptable" | "Observation",
+            "reasoning": "2-3 sentences. If score > 50, mark as Acceptable. If score < 50, note the observation but do NOT penalize."
         }},
         "final_decision": {{
              "status": "Hire" | "No Hire" | "Strong Hire" | "Consider for Future",
-             "summary": "Final concluding thought."
+             "summary": "4-6 sentences. Comprehensive final verdict synthesizing all evaluations. Do NOT penalize for integrity unless it's directly relevant to role requirements."
         }}
     }}
     """
@@ -105,10 +133,12 @@ def generate_psychometric_narrative(traits_data):
     """
     
     try:
-        # User requested specific "new 8b model" usage
+        # User requested 70b for better quality even for summary if possible, but 8b is fast.
+        # User said "use 70b model for generating output instead of 8b" generally.
+        # Let's switch this to 70b as well to be safe and high quality.
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant", 
+            model="llama-3.3-70b-versatile", 
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -165,9 +195,26 @@ def process_ai_rationale(candidate_id, app_instance=None):
         # 4. Text Assessment Data (Grading JSON directly)
         text_result = TextAssessmentResult.query.filter_by(candidate_id=candidate_id).first()
         text_data = text_result.grading_json if text_result and text_result.grading_json else {"error": "Text responses not graded yet."}
+
+        # 5. Coding Data
+        coding_result = CodingAssessmentResult.query.filter_by(candidate_id=candidate_id).first()
+        if coding_result and coding_result.grading_json:
+             coding_data = coding_result.grading_json
+        else:
+             # Try grading on the fly if missing
+             coding_data = process_coding_grading(candidate_id, app) or {"error": "Coding not submitted."}
+
+        # 6. Proctor Data
+        # Fetch latest session to check grading
+        last_session = ProctorSession.query.filter_by(candidate_id=candidate_id).order_by(ProctorSession.start_time.desc()).first()
+        if last_session and last_session.grading_json:
+            proctor_data = last_session.grading_json
+        else:
+            proctor_data = process_proctor_grading(candidate_id, app) or {"severity": "Unknown", "remark": "No session data."}
+
         
         print("🤖 Generating Final Rationale (Llama-70b)...")
-        rationale_data = generate_final_rationale(resume_data, mcq_data, text_data, psycho_data)
+        rationale_data = generate_final_rationale(resume_data, mcq_data, text_data, psycho_data, coding_data, proctor_data)
         
         # 5. Generate Readable Psychometric Summary (Llama-8b)
         if psycho_result:

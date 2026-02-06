@@ -465,6 +465,19 @@ class TextAssessmentResult(db.Model):
 
     candidate = db.relationship('CandidateAuth', backref=db.backref('text_assessment_result', uselist=False))
 
+#====================== Coding Assessment Result ============================
+class CodingAssessmentResult(db.Model):
+    __tablename__ = 'coding_assessment_results'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    candidate_id = db.Column(db.Integer, db.ForeignKey('candidate_auth.id'), nullable=False, unique=True)
+    score_percentage = db.Column(db.Float, default=0.0, nullable=False)  # Overall coding score
+    grading_json = db.Column(db.JSON, nullable=True)  # AI grading result
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    candidate = db.relationship('CandidateAuth', backref=db.backref('coding_assessment_result', uselist=False))
+
 #====================== Candidate Rationale ============================
 class CandidateRationale(db.Model):
     __tablename__ = 'candidate_rationale'

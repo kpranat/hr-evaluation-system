@@ -133,6 +133,14 @@ def create_app():
                 db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN text_based_completed_at TIMESTAMP"))
                 print("✅ Added text_based_completed_at column to candidate_auth")
             
+            if 'coding_completed' not in existing_columns:
+                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN coding_completed BOOLEAN DEFAULT FALSE NOT NULL"))
+                print("✅ Added coding_completed column to candidate_auth")
+            
+            if 'coding_completed_at' not in existing_columns:
+                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN coding_completed_at TIMESTAMP"))
+                print("✅ Added coding_completed_at column to candidate_auth")
+            
             db.session.commit()
 
     return app
