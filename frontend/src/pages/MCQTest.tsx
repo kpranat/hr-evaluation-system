@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle2, XCircle, ChevronRight } from 'lucide-react';
-import { mcqApi } from '@/lib/api';
+import { mcqApi, candidateApi } from '@/lib/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface MCQQuestion {
@@ -25,6 +25,7 @@ export default function MCQTest() {
   const [questions, setQuestions] = useState<MCQQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [previousAnswers, setPreviousAnswers] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
     show: boolean;
@@ -39,11 +40,16 @@ export default function MCQTest() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    loadQuestions();
-    loadResult();
-    preloadTextBasedQuestions();
+    initializeExam();
+    return () => {
+      // Cleanup heartbeat on unmount
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+      }
+    };
   }, []);
 
   const preloadTextBasedQuestions = async () => {
@@ -84,6 +90,78 @@ export default function MCQTest() {
     } catch (err) {
       console.error('⚠️ Failed to preload text-based questions (non-critical):', err);
       // Don't show error to user, this is background preloading
+    }
+  };
+
+  const initializeExam = async () => {
+    try {
+      // Load questions and previous answers in parallel
+      await Promise.all([
+        loadQuestions(),
+        loadPreviousAnswers(),
+        loadResult(),
+      ]);
+
+      // Check for saved position from resume
+      const savedPosition = sessionStorage.getItem('mcq_current_question');
+      if (savedPosition) {
+        const position = parseInt(savedPosition, 10);
+        if (!isNaN(position)) {
+          setCurrentIndex(position);
+          console.log(`✅ Restored position to question ${position + 1}`);
+        }
+        sessionStorage.removeItem('mcq_current_question'); // Clear after use
+      }
+
+      // Start heartbeat
+      startHeartbeat();
+
+      // Preload text-based questions in background
+      preloadTextBasedQuestions();
+    } catch (err) {
+      console.error('❌ Exam initialization error:', err);
+    }
+  };
+
+  const startHeartbeat = () => {
+    // Clear any existing interval
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+    }
+
+    // Send heartbeat every 30 seconds
+    heartbeatIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await candidateApi.sendHeartbeat(currentIndex);
+        if (response.data?.is_suspended) {
+          console.warn('⚠️ Exam has been suspended');
+          clearInterval(heartbeatIntervalRef.current!);
+          setError('Your exam has been suspended. Please contact your recruiter.');
+        }
+      } catch (err) {
+        console.error('⚠️ Heartbeat failed:', err);
+      }
+    }, 30000); // 30 seconds
+
+    console.log('💓 Heartbeat started');
+  };
+
+  const loadPreviousAnswers = async () => {
+    try {
+      console.log('📥 Loading previous answers...');
+      const response = await mcqApi.getAnswers();
+      
+      if (response.error) {
+        console.error('❌ Failed to load previous answers:', response.error);
+        return;
+      }
+
+      if (response.data?.answers) {
+        setPreviousAnswers(response.data.answers);
+        console.log(`✅ Loaded ${Object.keys(response.data.answers).length} previous answers`);
+      }
+    } catch (err) {
+      console.error('❌ Exception loading previous answers:', err);
     }
   };
 
@@ -146,6 +224,12 @@ export default function MCQTest() {
           correctAnswer: response.data.correct_answer,
         });
         setResult(response.data.result);
+        
+        // Update previousAnswers state to include this answer
+        setPreviousAnswers(prev => ({
+          ...prev,
+          [currentQuestion.question_id]: selectedOption
+        }));
       }
     } catch (err) {
       setError('Failed to submit answer');
@@ -156,11 +240,34 @@ export default function MCQTest() {
 
   const handleNextQuestion = () => {
     if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      setSelectedOption(null);
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
       setFeedback(null);
+      
+      // Restore previously selected answer for next question
+      const nextQuestion = questions[nextIndex];
+      if (nextQuestion && previousAnswers[nextQuestion.question_id]) {
+        setSelectedOption(previousAnswers[nextQuestion.question_id]);
+        console.log(`✅ Restored answer ${previousAnswers[nextQuestion.question_id]} for question ${nextQuestion.question_id}`);
+      } else {
+        setSelectedOption(null);
+      }
+
+      // Save position
+      sessionStorage.setItem('mcq_current_question', nextIndex.toString());
     }
   };
+
+  // Restore selected option when question changes
+  useEffect(() => {
+    if (questions.length > 0 && currentIndex < questions.length) {
+      const currentQuestion = questions[currentIndex];
+      if (currentQuestion && previousAnswers[currentQuestion.question_id]) {
+        setSelectedOption(previousAnswers[currentQuestion.question_id]);
+        console.log(`✅ Restored answer ${previousAnswers[currentQuestion.question_id]} for question ${currentQuestion.question_id}`);
+      }
+    }
+  }, [currentIndex, questions, previousAnswers]);
 
   if (loading) {
     return (

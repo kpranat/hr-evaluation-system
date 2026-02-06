@@ -325,6 +325,13 @@ class ProctorSession(db.Model):
     end_time = db.Column(db.DateTime, nullable=True)
     status = db.Column(db.String(20), nullable=False, default='active')  # active, completed, terminated
     
+    # Heartbeat and suspension tracking
+    last_activity = db.Column(db.DateTime, default=datetime.utcnow)
+    current_question_index = db.Column(db.Integer, default=0)
+    is_suspended = db.Column(db.Boolean, default=False)
+    suspension_reason = db.Column(db.String(255), nullable=True)
+    resume_allowed = db.Column(db.Boolean, default=False)
+    
     # Relationship to candidate
     candidate = db.relationship('CandidateAuth', backref=db.backref('proctor_sessions'))
     
@@ -336,7 +343,37 @@ class ProctorSession(db.Model):
             'assessment_id': self.assessment_id,
             'start_time': self.start_time.isoformat() if self.start_time else None,
             'end_time': self.end_time.isoformat() if self.end_time else None,
-            'status': self.status
+            'status': self.status,
+            'last_activity': self.last_activity.isoformat() if self.last_activity else None,
+            'current_question_index': self.current_question_index,
+            'is_suspended': self.is_suspended,
+            'suspension_reason': self.suspension_reason,
+            'resume_allowed': self.resume_allowed
+        }
+
+#====================== Integrity Log ============================
+class IntegrityLog(db.Model):
+    __tablename__ = 'integrity_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('proctor_sessions.id'), nullable=False)
+    event = db.Column(db.String(100), nullable=False)  # CONNECTION_LOST, EXAM_RESUMED, RESUME_AUTHORIZED
+    severity = db.Column(db.String(20), nullable=False)  # INFO, WARNING, CRITICAL
+    details = db.Column(db.Text, nullable=True)  # Additional details
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationship to session
+    session = db.relationship('ProctorSession', backref=db.backref('integrity_logs'))
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'session_id': self.session_id,
+            'event': self.event,
+            'severity': self.severity,
+            'details': self.details,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
         }
 
 #====================== Proctor Event ============================

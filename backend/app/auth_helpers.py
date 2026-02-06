@@ -87,6 +87,7 @@ def verify_recruiter_token():
     auth_header = request.headers.get('Authorization')
     
     if not auth_header or not auth_header.startswith('Bearer '):
+        print(f"⚠ AUTH: No Bearer token in request. Header: {auth_header}")
         return None, (jsonify({
             'success': False,
             'message': 'Authentication required. Please provide Bearer token.'
@@ -97,8 +98,12 @@ def verify_recruiter_token():
     try:
         payload = jwt.decode(token, Config.JWT_SECRET, algorithms=['HS256'])
         
+        # Debug: Print token payload
+        print(f"🔍 AUTH: Token payload: user_id={payload.get('user_id')}, type={payload.get('type')}, email={payload.get('email')}")
+        
         # Verify it's a recruiter token
         if payload.get('type') != 'recruiter':
+            print(f"❌ AUTH: Token type mismatch. Expected 'recruiter', got '{payload.get('type')}'")
             return None, (jsonify({
                 'success': False,
                 'message': 'Unauthorized: Recruiter access required'
@@ -111,19 +116,23 @@ def verify_recruiter_token():
                 'message': 'Invalid token: Missing user_id'
             }), 401)
         
+        print(f"✓ AUTH: Recruiter authenticated - ID: {recruiter_id}")
         return recruiter_id, None
         
     except jwt.ExpiredSignatureError:
+        print(f"⚠ AUTH: Token expired")
         return None, (jsonify({
             'success': False,
             'message': 'Token has expired. Please login again.'
         }), 401)
     except jwt.InvalidTokenError as e:
+        print(f"❌ AUTH: Invalid token - {str(e)}")
         return None, (jsonify({
             'success': False,
             'message': f'Invalid token: {str(e)}'
         }), 401)
     except Exception as e:
+        print(f"❌ AUTH: Unexpected error - {str(e)}")
         return None, (jsonify({
             'success': False,
             'message': f'Authentication error: {str(e)}'

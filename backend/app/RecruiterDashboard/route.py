@@ -5,7 +5,7 @@ Handles all recruiter dashboard operations
 
 from flask import request, jsonify
 from . import RecruiterDashboard
-from ..models import CandidateAuth, MCQQuestion, MCQAnswer, EvaluationCriteria, ProctorSession, MCQResult, PsychometricResult, TextAssessmentResult, CandidateRationale, CodingAssessmentResult
+from ..models import CandidateAuth, MCQQuestion, MCQAnswer, EvaluationCriteria, ProctorSession, MCQResult, PsychometricResult, TextAssessmentResult, CandidateRationale, CodingAssessmentResult, IntegrityLog, TextBasedAnswer, CodingSubmission, ProctoringViolation, ProctorEvent
 from ..extensions import db
 from ..config import Config
 from ..auth_helpers import verify_recruiter_token
@@ -13,6 +13,7 @@ import jwt
 import pandas as pd
 import io
 from services.AI_rationale import process_ai_rationale
+from datetime import datetime
 
 
 @RecruiterDashboard.route('/candidates/upload', methods=['POST'])
@@ -871,6 +872,32 @@ def get_candidates():
             ]
             valid_timestamps = [ts for ts in timestamps if ts is not None]
             last_active = max(valid_timestamps) if valid_timestamps else None
+            
+            # Check for suspended exam session
+            suspended_session = ProctorSession.query.filter_by(
+                candidate_id=candidate.id,
+                status='active',
+                is_suspended=True
+            ).order_by(ProctorSession.start_time.desc()).first()
+            
+            suspension_info = None
+            if suspended_session:
+                suspension_info = {
+                    'is_suspended': True,
+                    'suspension_reason': suspended_session.suspension_reason,
+                    'resume_allowed': suspended_session.resume_allowed,
+                    'last_activity': suspended_session.last_activity.isoformat() if suspended_session.last_activity else None
+                }
+            
+            # Determine frontend status
+            if suspension_info:
+                frontend_status = 'in-progress'  # Suspended but in progress
+            elif has_taken_test and (candidate.mcq_completed and candidate.psychometric_completed and candidate.text_based_completed):
+                frontend_status = 'completed'
+            elif has_taken_test:
+                frontend_status = 'in-progress'
+            else:
+                frontend_status = 'pending'
 
             candidates_data.append({
                 'id': candidate.id,
@@ -881,13 +908,16 @@ def get_candidates():
                 'soft_skill_score': round(soft_skill_score, 2) if has_taken_test else None,
                 'fairplay_score': round(fairplay_score, 2) if has_taken_test else None,
                 'overall_score': round(overall_score, 2) if has_taken_test else None,
-                'status': status,
+                'status': frontend_status,
+                'score_status': status,  # High Match, Potential, Reject
                 'has_taken_test': has_taken_test,
+                'applied_date': last_active.strftime('%Y-%m-%d') if last_active else 'N/A',
                 'last_active': last_active.isoformat() if last_active else None,
                 'mcq_completed': candidate.mcq_completed,
                 'psychometric_completed': candidate.psychometric_completed,
                 'technical_completed': candidate.technical_completed,
-                'text_based_completed': candidate.text_based_completed
+                'text_based_completed': candidate.text_based_completed,
+                'suspension_info': suspension_info
             })
         
         # Sort candidates by last_active descending (most recent first)
@@ -1288,6 +1318,24 @@ def get_candidate_detail(candidate_id):
                     ai_rationale += "Multiple integrity concerns were flagged during assessment. "
                 ai_rationale += "Consider for future opportunities after further development."
         
+        # Check for suspended exam session
+        suspended_session = ProctorSession.query.filter_by(
+            candidate_id=candidate.id,
+            status='active',
+            is_suspended=True
+        ).order_by(ProctorSession.start_time.desc()).first()
+        
+        suspension_info = None
+        if suspended_session:
+            suspension_info = {
+                'session_id': suspended_session.id,
+                'is_suspended': True,
+                'suspension_reason': suspended_session.suspension_reason,
+                'last_activity': suspended_session.last_activity.isoformat() if suspended_session.last_activity else None,
+                'current_question': suspended_session.current_question_index,
+                'resume_allowed': suspended_session.resume_allowed
+            }
+        
         candidate_data = {
             'id': candidate.id,
             'email': candidate.email,
@@ -1304,7 +1352,8 @@ def get_candidate_detail(candidate_id):
             'psychometric_result': psycho_data,
             'text_answers': text_answers_data,
             'integrity_logs': integrity_logs,
-            'ai_rationale': ai_rationale
+            'ai_rationale': ai_rationale,
+            'suspension_info': suspension_info
         }
         
         return jsonify({
@@ -1315,6 +1364,202 @@ def get_candidate_detail(candidate_id):
     except Exception as e:
         import traceback
         print(f"\n❌ GET CANDIDATE DETAIL ERROR: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'An error occurred: {str(e)}'
+        }), 500
+
+
+@RecruiterDashboard.route('/candidates/<int:candidate_id>/allow-resume', methods=['POST'])
+def allow_exam_resume(candidate_id):
+    """
+    ALLOW EXAM RESUME ENDPOINT
+    
+    Authorizes a candidate to resume their suspended exam session.
+    Used when a candidate's session was suspended due to connection loss.
+    
+    Authentication: Required (JWT Bearer token - recruiter only)
+    
+    Request:
+        - Method: POST
+        - Path: /candidates/<candidate_id>/allow-resume
+        - Headers: {"Authorization": "Bearer JWT_TOKEN"}
+        
+    Response:
+        Success (200):
+        {
+            "success": true,
+            "message": "Exam resume authorized",
+            "session_id": 123
+        }
+        
+        Failure:
+        {
+            "success": false,
+            "message": "No suspended exam found for this candidate"
+        }
+        
+    Status Codes:
+        - 200: Resume authorized successfully
+        - 401: Unauthorized (invalid/missing token)
+        - 404: No suspended exam found
+        - 500: Server error
+    """
+    try:
+        # Verify recruiter token
+        recruiter_id, error = verify_recruiter_token()
+        if error:
+            return error
+        
+        # Find suspended exam session
+        session = ProctorSession.query.filter_by(
+            candidate_id=candidate_id,
+            status='active',
+            is_suspended=True
+        ).order_by(ProctorSession.start_time.desc()).first()
+        
+        if not session:
+            return jsonify({
+                'success': False,
+                'message': 'No suspended exam found for this candidate'
+            }), 404
+        
+        # Allow resume
+        session.resume_allowed = True
+        
+        # Log authorization action
+        integrity_log = IntegrityLog(
+            session_id=session.id,
+            event='RESUME_AUTHORIZED',
+            severity='INFO',
+            details=f'Recruiter (ID: {recruiter_id}) authorized exam resume',
+            timestamp=datetime.utcnow()
+        )
+        db.session.add(integrity_log)
+        db.session.commit()
+        
+        print(f"✓ Recruiter {recruiter_id} authorized resume for candidate {candidate_id}, session {session.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Exam resume authorized. Candidate can now resume their exam.',
+            'session_id': session.id
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        print(f"\n❌ ALLOW EXAM RESUME ERROR: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'An error occurred: {str(e)}'
+        }), 500
+
+
+@RecruiterDashboard.route('/candidates/<int:candidate_id>/reset', methods=['POST'])
+def reset_candidate_exam(candidate_id):
+    """
+    RESET CANDIDATE EXAM ENDPOINT
+    
+    Completely resets a candidate's exam state, allowing them to retake all assessments.
+    This is a FULL reset - clears all progress, answers, and session data.
+    
+    Authentication: Required (JWT Bearer token - recruiter only)
+    
+    Request:
+        - Method: POST
+        - Path: /candidates/<candidate_id>/reset
+        - Headers: {"Authorization": "Bearer JWT_TOKEN"}
+        
+    Response:
+        Success (200):
+        {
+            "success": true,
+            "message": "Candidate exam reset successfully"
+        }
+        
+    Status Codes:
+        - 200: Reset successful
+        - 401: Unauthorized
+        - 404: Candidate not found
+        - 500: Server error
+        
+    Note: This provides the same functionality as the reset_candidate.py script
+          but accessible through the API for the recruiter dashboard.
+    """
+    try:
+        # Verify recruiter token
+        recruiter_id, error = verify_recruiter_token()
+        if error:
+            return error
+        
+        # Find candidate
+        candidate = CandidateAuth.query.get(candidate_id)
+        if not candidate:
+            return jsonify({
+                'success': False,
+                'message': 'Candidate not found'
+            }), 404
+        
+        # Reset all completion flags
+        candidate.mcq_completed = False
+        candidate.mcq_completed_at = None
+        candidate.psychometric_completed = False
+        candidate.psychometric_completed_at = None
+        candidate.technical_completed = False
+        candidate.technical_completed_at = None
+        candidate.text_based_completed = False
+        candidate.text_based_completed_at = None
+        candidate.coding_completed = False
+        candidate.coding_completed_at = None
+        
+        # Delete all assessment results
+        # Note: Different models use different column names (student_id vs candidate_id)
+        MCQResult.query.filter_by(student_id=candidate_id).delete()
+        MCQAnswer.query.filter_by(candidate_id=candidate_id).delete()  # Uses candidate_id
+        PsychometricResult.query.filter_by(student_id=candidate_id).delete()
+        TextBasedAnswer.query.filter_by(student_id=candidate_id).delete()  # Delete text answers
+        TextAssessmentResult.query.filter_by(candidate_id=candidate_id).delete()
+        CodingAssessmentResult.query.filter_by(candidate_id=candidate_id).delete()
+        CodingSubmission.query.filter_by(candidate_id=candidate_id).delete()  # Delete coding submissions
+        CandidateRationale.query.filter_by(candidate_id=candidate_id).delete()
+        ProctoringViolation.query.filter_by(candidate_id=candidate_id).delete()  # Delete proctoring violations
+        
+        # Get all sessions for this candidate and delete their events
+        sessions = ProctorSession.query.filter_by(candidate_id=candidate_id).all()
+        for session in sessions:
+            # Delete proctor events for this session
+            ProctorEvent.query.filter_by(session_id=session.id).delete()
+            # Keep IntegrityLogs for audit trail
+            
+            # Terminate the session
+            session.status = 'terminated'
+            session.end_time = datetime.utcnow()
+            
+            # Log reset action
+            integrity_log = IntegrityLog(
+                session_id=session.id,
+                event='EXAM_RESET',
+                severity='INFO',
+                details=f'Recruiter (ID: {recruiter_id}) performed full exam reset',
+                timestamp=datetime.utcnow()
+            )
+            db.session.add(integrity_log)
+        
+        db.session.commit()
+        
+        print(f"✓ Recruiter {recruiter_id} reset exam for candidate {candidate_id} ({candidate.email})")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Candidate {candidate.email} has been reset. They can now retake all assessments.'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        print(f"\n❌ RESET CANDIDATE ERROR: {str(e)}")
         print(traceback.format_exc())
         return jsonify({
             'success': False,

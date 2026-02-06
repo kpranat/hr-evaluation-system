@@ -251,6 +251,53 @@ def submit_mcq_answer():
         }), 500
 
 
+@MCQ.route('/answers', methods=['GET'])
+def get_mcq_answers():
+    """
+    GET MCQ ANSWERS ENDPOINT
+    
+    Fetches all previously submitted MCQ answers for the authenticated candidate.
+    Used to restore answer selections when resuming an exam.
+    
+    Authentication: Required (JWT Bearer token - candidate only)
+    
+    Response:
+        {
+            "success": true,
+            "answers": {
+                "101": 2,  // question_id: selected_option
+                "102": 4,
+                "103": 1
+            }
+        }
+    """
+    # Verify authentication
+    candidate_id, error_response = verify_candidate_token()
+    if error_response:
+        return error_response
+    
+    try:
+        # Get all submitted answers for this candidate
+        answers = MCQAnswer.query.filter_by(candidate_id=candidate_id).all()
+        
+        # Convert to dict format: {question_id: selected_option}
+        answers_dict = {str(answer.question_id): answer.selected_option for answer in answers}
+        
+        print(f"📥 Returning {len(answers_dict)} previously submitted answers for candidate {candidate_id}")
+        
+        return jsonify({
+            'success': True,
+            'answers': answers_dict
+        }), 200
+        
+    except Exception as e:
+        print(f"\\n❌ GET ANSWERS ERROR: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'An error occurred: {str(e)}'
+        }), 500
+
+
 @MCQ.route('/result', methods=['GET'])
 def get_mcq_result():
     """

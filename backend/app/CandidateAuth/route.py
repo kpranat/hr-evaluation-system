@@ -5,9 +5,10 @@ Handles candidate authentication operations
 
 from flask import request, jsonify
 from . import CandidateAuth
-from ..models import CandidateAuth as CandidateAuthModel
+from ..models import CandidateAuth as CandidateAuthModel, ProctorSession, IntegrityLog
 from ..extensions import db
 from ..config import Config
+from ..auth_helpers import verify_candidate_token
 import jwt
 from datetime import datetime, timedelta
 
@@ -106,6 +107,13 @@ def login():
                 'message': 'Assessment already completed. You cannot login again.'
             }), 403
         
+        # Check for suspended exam session
+        suspended_session = ProctorSession.query.filter_by(
+            candidate_id=candidate.id,
+            status='active',
+            is_suspended=True
+        ).first()
+        
         # Generate JWT token with candidate information
         token_payload = {
             'user_id': candidate.id,
@@ -116,13 +124,25 @@ def login():
         
         token = jwt.encode(token_payload, Config.JWT_SECRET, algorithm='HS256')
         
-        # Return success response with token and user details
-        return jsonify({
+        # Prepare response data
+        response_data = {
             'success': True,
             'message': 'Login successful',
             'token': token,
             'user': candidate.to_dict()
-        }), 200
+        }
+        
+        # Add suspended exam information if exists
+        if suspended_session:
+            response_data['suspended_exam'] = {
+                'session_id': suspended_session.id,
+                'suspension_reason': suspended_session.suspension_reason,
+                'can_resume': suspended_session.resume_allowed,
+                'current_question': suspended_session.current_question_index
+            }
+        
+        # Return success response with token and user details
+        return jsonify(response_data), 200
         
     except Exception as e:
         import traceback
@@ -250,5 +270,192 @@ def verify_token():
         print(traceback.format_exc())
         return jsonify({
             'valid': False,
+            'message': f'An error occurred: {str(e)}'
+        }), 500
+
+
+@CandidateAuth.route('/exam/heartbeat', methods=['POST'])
+def exam_heartbeat():
+    """
+    EXAM HEARTBEAT ENDPOINT
+    
+    Records exam session activity and saves current progress.
+    Called every 30 seconds by frontend to detect connection loss.
+    
+    Authentication: Required (JWT Bearer token)
+    
+    Request:
+        - Method: POST
+        - Headers: {"Authorization": "Bearer JWT_TOKEN"}
+        - Body: {
+            "session_id": 123,  # Optional proctor session ID
+            "current_question": 5  # Current question index
+        }
+        
+    Response:
+        Success (200):
+        {
+            "success": true,
+            "message": "Heartbeat recorded",
+            "time_remaining": 3600.5,
+            "is_suspended": false
+        }
+        
+    Status Codes:
+        - 200: Heartbeat recorded successfully
+        - 401: Unauthorized
+        - 404: No active exam session found
+        - 500: Server error
+    """
+    try:
+        # Verify token
+        candidate_id, error = verify_candidate_token()
+        if error:
+            return error
+        
+        # Get active exam session
+        session = ProctorSession.query.filter_by(
+            candidate_id=candidate_id,
+            status='active'
+        ).order_by(ProctorSession.start_time.desc()).first()
+        
+        if not session:
+            return jsonify({
+                'success': False,
+                'message': 'No active exam session found'
+            }), 404
+        
+        # Update last activity timestamp
+        session.last_activity = datetime.utcnow()
+        
+        # Save current progress from request
+        data = request.get_json() or {}
+        if data.get('current_question') is not None:
+            session.current_question_index = data.get('current_question')
+        
+        db.session.commit()
+        
+        # Calculate time remaining if end_time exists
+        time_remaining = None
+        if session.end_time:
+            time_remaining = (session.end_time - datetime.utcnow()).total_seconds()
+            time_remaining = max(0, time_remaining)  # Don't return negative
+        
+        return jsonify({
+            'success': True,
+            'message': 'Heartbeat recorded',
+            'time_remaining': time_remaining,
+            'is_suspended': session.is_suspended
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        print(f"\n❌ EXAM HEARTBEAT ERROR: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'An error occurred: {str(e)}'
+        }), 500
+
+
+@CandidateAuth.route('/exam/resume', methods=['POST'])
+def resume_exam():
+    """
+    RESUME SUSPENDED EXAM ENDPOINT
+    
+    Resumes a suspended exam session after recruiter authorization.
+    Returns saved progress including current question and previous answers.
+    
+    Authentication: Required (JWT Bearer token)
+    
+    Request:
+        - Method: POST
+        - Headers: {"Authorization": "Bearer JWT_TOKEN"}
+        
+    Response:
+        Success (200):
+        {
+            "success": true,
+            "message": "Exam resumed successfully",
+            "session_id": 123,
+            "current_question": 5,
+            "time_remaining": 3600.5
+        }
+        
+        Failure:
+        {
+            "success": false,
+            "message": "Exam resume not authorized by recruiter"
+        }
+        
+    Status Codes:
+        - 200: Exam resumed successfully
+        - 401: Unauthorized
+        - 403: Resume not authorized by recruiter
+        - 404: No suspended exam found
+        - 500: Server error
+    """
+    try:
+        # Verify token
+        candidate_id, error = verify_candidate_token()
+        if error:
+            return error
+        
+        # Find suspended exam
+        session = ProctorSession.query.filter_by(
+            candidate_id=candidate_id,
+            status='active',
+            is_suspended=True
+        ).order_by(ProctorSession.start_time.desc()).first()
+        
+        if not session:
+            return jsonify({
+                'success': False,
+                'message': 'No suspended exam found'
+            }), 404
+        
+        # Check if recruiter has allowed resume
+        if not session.resume_allowed:
+            return jsonify({
+                'success': False,
+                'message': 'Exam resume not authorized by recruiter. Please contact your recruiter.'
+            }), 403
+        
+        # Resume the exam
+        session.is_suspended = False
+        session.last_activity = datetime.utcnow()
+        session.resume_allowed = False  # Reset flag after use
+        
+        # Log resume event
+        integrity_log = IntegrityLog(
+            session_id=session.id,
+            event='EXAM_RESUMED',
+            severity='INFO',
+            details='Exam resumed after suspension',
+            timestamp=datetime.utcnow()
+        )
+        db.session.add(integrity_log)
+        db.session.commit()
+        
+        # Calculate time remaining
+        time_remaining = None
+        if session.end_time:
+            time_remaining = (session.end_time - datetime.utcnow()).total_seconds()
+            time_remaining = max(0, time_remaining)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Exam resumed successfully',
+            'session_id': session.id,
+            'current_question': session.current_question_index,
+            'time_remaining': time_remaining
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        print(f"\n❌ EXAM RESUME ERROR: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
             'message': f'An error occurred: {str(e)}'
         }), 500

@@ -15,10 +15,21 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
-    // Get token from localStorage (try both candidate and recruiter tokens)
+    // Get token from localStorage
+    // Prioritize based on endpoint
     const candidateToken = localStorage.getItem('candidate_token');
     const recruiterToken = localStorage.getItem('recruiterToken');
-    const token = candidateToken || recruiterToken;
+    
+    // Smart token selection based on endpoint
+    let token = null;
+    if (endpoint.includes('/api/recruiter') || endpoint.includes('/api/admin')) {
+      token = recruiterToken; // Use recruiter token for recruiter/admin endpoints
+    } else if (endpoint.includes('/api/candidate')) {
+      token = candidateToken; // Use candidate token for candidate endpoints
+    } else {
+      // Fallback: try both, prioritize recruiter for admin routes
+      token = recruiterToken || candidateToken;
+    }
 
     // Build headers with authentication if token exists
     const headers: HeadersInit = {
@@ -113,6 +124,37 @@ export const candidateApi = {
       },
     });
   },
+
+  /** Send heartbeat to track exam progress */
+  sendHeartbeat: async (currentQuestion?: number) => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/candidate/exam/heartbeat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ current_question: currentQuestion }),
+    });
+  },
+
+  /** Resume suspended exam */
+  resumeExam: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/candidate/exam/resume', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
 };
 
 // ============ Recruiter Endpoints ============
@@ -144,6 +186,32 @@ export const recruiterApi = {
       },
     });
   },
+
+  /** Allow candidate to resume suspended exam */
+  allowResume: async (candidateId: number) => {
+    const token = localStorage.getItem('recruiterToken');
+    if (!token) return { data: null, error: 'Auth required' };
+
+    return request(`/api/recruiter/candidates/${candidateId}/allow-resume`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+
+  /** Reset candidate exam completely */
+  resetExam: async (candidateId: number) => {
+    const token = localStorage.getItem('recruiterToken');
+    if (!token) return { data: null, error: 'Auth required' };
+
+    return request(`/api/recruiter/candidates/${candidateId}/reset`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
 };
 
 // ============ Admin/Recruiter Endpoints ============
@@ -151,12 +219,28 @@ export const recruiterApi = {
 export const adminApi = {
   /** Get all candidates */
   getCandidates: async () => {
-    return request('/api/recruiter/candidates');
+    const token = localStorage.getItem('recruiterToken');
+    if (!token) return { data: null, error: 'Auth required' };
+
+    return request('/api/recruiter/candidates', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
   },
 
   /** Get single candidate details */
   getCandidate: async (candidateId: string) => {
-    return request(`/api/admin/candidates/${candidateId}`);
+    const token = localStorage.getItem('recruiterToken');
+    if (!token) return { data: null, error: 'Auth required' };
+
+    return request(`/api/admin/candidates/${candidateId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
   },
 
   /** Upload candidates from CSV/Excel file */
@@ -195,13 +279,27 @@ export const adminApi = {
 
   /** Get analytics dashboard data */
   getAnalytics: async () => {
-    return request('/api/admin/analytics');
+    const token = localStorage.getItem('recruiterToken');
+    if (!token) return { data: null, error: 'Auth required' };
+
+    return request('/api/admin/analytics', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
   },
 
   /** Update settings */
   updateSettings: async (settings: Record<string, unknown>) => {
+    const token = localStorage.getItem('recruiterToken');
+    if (!token) return { data: null, error: 'Auth required' };
+
     return request('/api/admin/settings', {
       method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
       body: JSON.stringify(settings),
     });
   },
@@ -251,6 +349,20 @@ export const mcqApi = {
     }
 
     return request('/api/mcq/result', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
+
+  /** Get previously submitted answers */
+  getAnswers: async () => {
+    const token = localStorage.getItem('candidate_token');
+    if (!token) {
+      return { data: null, error: 'No authentication token found' };
+    }
+
+    return request('/api/mcq/answers', {
       headers: {
         'Authorization': `Bearer ${token}`,
       },

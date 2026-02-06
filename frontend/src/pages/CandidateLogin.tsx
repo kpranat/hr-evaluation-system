@@ -29,6 +29,40 @@ export default function CandidateLogin() {
         localStorage.setItem('candidate_token', (result.data as any).token);
         localStorage.setItem('candidate_user', JSON.stringify((result.data as any).user));
 
+        // Check for suspended exam
+        if ((result.data as any).suspended_exam) {
+          const suspendedExam = (result.data as any).suspended_exam;
+          console.log('⚠️ Suspended exam detected:', suspendedExam);
+          
+          // Save current question index for resume
+          if (suspendedExam.current_question !== undefined) {
+            sessionStorage.setItem('mcq_current_question', suspendedExam.current_question.toString());
+            console.log(`✅ Saved exam position: question ${suspendedExam.current_question}`);
+          }
+
+          // Check if resume is allowed
+          if (!suspendedExam.can_resume) {
+            setError(`Your exam was suspended: ${suspendedExam.suspension_reason}. Please contact your recruiter to resume.`);
+            setLoading(false);
+            return;
+          }
+
+          // Try to resume exam
+          try {
+            const resumeResult = await candidateApi.resumeExam();
+            if (resumeResult.data && (resumeResult.data as any).success) {
+              console.log('✅ Exam resumed successfully');
+              // Update saved position with latest data
+              if ((resumeResult.data as any).current_question !== undefined) {
+                sessionStorage.setItem('mcq_current_question', (resumeResult.data as any).current_question.toString());
+              }
+            }
+          } catch (resumeErr) {
+            console.error('❌ Failed to resume exam:', resumeErr);
+            // Continue to dashboard anyway, user can try again
+          }
+        }
+
         // Navigate to candidate home
         navigate('/candidate');
       } else {
