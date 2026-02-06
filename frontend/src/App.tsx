@@ -41,7 +41,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true }}>
         <div className="min-h-screen bg-background text-foreground">
           <Routes>
             {/* Candidate Flow - Minimal Layout */}

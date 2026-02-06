@@ -35,6 +35,7 @@ interface Candidate {
   psychometric_completed: boolean;
   technical_completed: boolean;
   text_based_completed: boolean;
+  last_active: string | null;
 }
 
 interface Stats {
@@ -60,7 +61,7 @@ export default function Dashboard() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const token = localStorage.getItem('recruiterToken');
       if (!token) {
         setError('Authentication required');
@@ -208,6 +209,7 @@ export default function Dashboard() {
                       <TableHead>Technical Score</TableHead>
                       <TableHead>Soft Skill Score</TableHead>
                       <TableHead>Overall Score</TableHead>
+                      <TableHead>Last Active</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -252,6 +254,20 @@ export default function Dashboard() {
                             <span className="font-semibold">{candidate.overall_score.toFixed(1)}%</span>
                           ) : (
                             <span className="text-xs text-muted-foreground italic">Not tested</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {candidate.last_active ? (
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium">
+                                {new Date(candidate.last_active).toLocaleDateString()}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(candidate.last_active).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">-</span>
                           )}
                         </TableCell>
                         <TableCell>

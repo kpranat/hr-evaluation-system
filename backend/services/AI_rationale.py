@@ -16,44 +16,58 @@ def generate_final_rationale(resume_data, mcq_score, text_remark, psychometric_a
     """
     prompt = f"""
     Act as a Senior Technical Recruiter and Assessment Expert.
-    Be strict and critical.
-    Analyze the following candidate data from multiple assessments to produce a Final Rationale Report.
+    Your goal is to provide a comprehensive, transparent, and balanced evaluation of the candidate.
+    
+    DATA PROVIDED:
     
     1. RESUME DATA:
     {json.dumps(resume_data, indent=2) if isinstance(resume_data, dict) else resume_data}
     
-    2. MCQ TECHNICAL SCORE:
+    2. TECHNICAL SCORE (MCQ Based):
     {json.dumps(mcq_score, indent=2) if isinstance(mcq_score, dict) else mcq_score}
     
-    3. TEXT RESPONSE EVALUATION (Soft Skills & Communication):
+    3. SOFT SKILLS (Text Assessment Based):
     {json.dumps(text_remark, indent=2) if isinstance(text_remark, dict) else text_remark}
     
-    4. PSYCHOMETRIC ANALYSIS (Personality Fit):
+    4. PSYCHOMETRIC TRAITS (For Reference Only - Do NOT grade pass/fail):
     {json.dumps(psychometric_analysis, indent=2) if isinstance(psychometric_analysis, dict) else psychometric_analysis}
     
-    TASK:
-    Grade the candidate objectively on the following 4 criteria. For each, provide a "grade" (Excellent/Good/Average/Poor) and "reasoning" (1-2 sentences explaining the grade).
+    INSTRUCTIONS:
+    Analyze the candidate data to produce a Final Rationale Report.
     
-    RETURN ONLY JSON in the following format:
+    SCORING RULES:
+    - Technical Grade: Base heavily on the MCQ Score.
+    - Soft Skills Grade: Base heavily on the Text Assessment Score/Remarks.
+    - Psychometric: Provide insights on personality fit based on traits. Do NOT assign a "Poor" grade just because traits are average; treat them as neutral/informative unless extreme.
+    
+    CRITICALITY GUIDELINES:
+    - Be fair: If a candidate has a good Technical Score (e.g. >70%), they should generally NOT be rated "Poor" overall unless Soft Skills are terrible.
+    - Contextualize: High Technical + Low Soft Skills = Potential Individual Contributor. Low Technical + High Soft Skills = Potential Jr/Support role.
+    
+    TRANSPARENCY REQUIREMENT:
+    - In the "reasoning" for each section, explicitely cite the scores (e.g., "...given the Technical Score of 85%..." or "...Communication Score of 9/10...").
+    
+    OUTPUT FORMAT:
+    Return ONLY valid JSON in the following format:
     {{
         "technical_evaluation": {{
-            "grade": "<grade>",
-            "reasoning": "<reasoning>"
+            "grade": "Excellent" | "Good" | "Average" | "Poor",
+            "reasoning": "1-2 sentences. Cite MCQ score."
         }},
         "soft_skills_evaluation": {{
-            "grade": "<grade>",
-            "reasoning": "<reasoning>"
+            "grade": "Excellent" | "Good" | "Average" | "Poor",
+            "reasoning": "1-2 sentences. Cite Text Assessment score."
         }},
         "psychometric_evaluation": {{
-            "grade": "<grade>",
-            "reasoning": "<reasoning>"
+            "grade": "Insight" | "Neutral",
+            "reasoning": "1-2 sentences on personality fit (Extraversion, etc.)."
         }},
         "resume_fit": {{
-            "grade": "<grade>",
-            "reasoning": "<reasoning>"
+            "grade": "Excellent" | "Good" | "Average" | "Poor",
+            "reasoning": "1-2 sentences."
         }},
         "final_decision": {{
-             "status": "Hire/No Hire/Strong Hire/Maybe",
+             "status": "Hire" | "No Hire" | "Strong Hire" | "Consider for Future",
              "summary": "Final concluding thought."
         }}
     }}
@@ -62,12 +76,44 @@ def generate_final_rationale(resume_data, mcq_score, text_remark, psychometric_a
     try:
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile", # Using the larger model for reasoning
+            model="llama-3.3-70b-versatile",
         )
         return json.loads(clean_json_output(response.choices[0].message.content))
     except Exception as e:
         print(f"Error generating rationale: {e}")
         return {"error": str(e)}
+
+def generate_psychometric_narrative(traits_data):
+    """
+    Uses a smaller, faster model (Llama-3 8b) to convert raw trait scores into a readable paragraph.
+    Input: Dict of traits {'extraversion': 3.5, ...}
+    Output: String (paragraph)
+    """
+    prompt = f"""
+    Act as an Industrial-Organizational Psychologist.
+    Convert the following Big Five personality trait scores (0-5 scale) into a single, professional, easy-to-read paragraph summarizing the candidate's personality profile.
+    
+    TRAIT SCORES:
+    {json.dumps(traits_data, indent=2)}
+    
+    GUIDELINES:
+    - Do NOT list the scores numbers in the text.
+    - Focus on behaviors: e.g., "The candidate is highly organized..." instead of "Conscientiousness is 4.5".
+    - Be balanced and professional.
+    - Keep it under 80 words.
+    - Return ONLY the paragraph text. No JSON, no intro.
+    """
+    
+    try:
+        # User requested specific "new 8b model" usage
+        response = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.1-8b-instant", 
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error generating psychometric narrative: {e}")
+        return "Psychometric analysis available but narrative generation failed."
 
 def process_ai_rationale(candidate_id, app_instance=None):
     """
@@ -82,7 +128,7 @@ def process_ai_rationale(candidate_id, app_instance=None):
         context.push()
 
     try:
-        print(f"🔄 Fetching data for Candidate {candidate_id}...")
+        print(f"🔄 Fetching raw score data for Candidate {candidate_id}...")
         
         # 1. Resume Data
         candidate = CandidateAuth.query.get(candidate_id)
@@ -91,20 +137,54 @@ def process_ai_rationale(candidate_id, app_instance=None):
              return None
         resume_data = candidate.resume_data if candidate.resume_data else {"error": "Resume data not processed yet."}
         
-        # 2. MCQ Data
+        # 2. MCQ Data (Raw Score)
         mcq_result = MCQResult.query.filter_by(student_id=candidate_id).first()
-        mcq_data = mcq_result.grading_json if mcq_result and mcq_result.grading_json else {"percentage": "N/A", "error": "MCQ not graded yet."}
+        if mcq_result:
+            mcq_data = {
+                "percentage": mcq_result.percentage_correct,
+                "correct": mcq_result.correct_answers,
+                "total": mcq_result.correct_answers + mcq_result.wrong_answers
+            }
+        else:
+            mcq_data = {"percentage": 0, "error": "MCQ not taken."}
         
-        # 3. Psychometric Data
+        # 3. Psychometric Data (Raw Traits)
         psycho_result = PsychometricResult.query.filter_by(student_id=candidate_id).first()
-        psycho_data = psycho_result.grading_json if psycho_result and psycho_result.grading_json else {"match_grade": "N/A", "error": "Psychometric not graded yet."}
+        if psycho_result:
+            # Map 0-50 scores to 0-5 for clarity in prompt
+            psycho_data = {
+                "extraversion": round(psycho_result.extraversion / 10, 1),
+                "agreeableness": round(psycho_result.agreeableness / 10, 1),
+                "conscientiousness": round(psycho_result.conscientiousness / 10, 1),
+                "emotional_stability": round(psycho_result.emotional_stability / 10, 1),
+                "intellect_imagination": round(psycho_result.intellect_imagination / 10, 1)
+            }
+        else:
+            psycho_data = {"error": "Psychometric not taken."}
         
-        # 4. Text Assessment Data
+        # 4. Text Assessment Data (Grading JSON directly)
         text_result = TextAssessmentResult.query.filter_by(candidate_id=candidate_id).first()
-        text_data = text_result.grading_json if text_result and text_result.grading_json else {"remark": "N/A", "error": "Text responses not graded yet."}
+        text_data = text_result.grading_json if text_result and text_result.grading_json else {"error": "Text responses not graded yet."}
         
         print("🤖 Generating Final Rationale (Llama-70b)...")
         rationale_data = generate_final_rationale(resume_data, mcq_data, text_data, psycho_data)
+        
+        # 5. Generate Readable Psychometric Summary (Llama-8b)
+        if psycho_result:
+            print("🧠 Generating Psychometric Narrative (Llama-8b)...")
+            psycho_narrative = generate_psychometric_narrative(psycho_data)
+            
+            # Inject into the main rationale JSON
+            if "psychometric_evaluation" in rationale_data:
+                rationale_data["psychometric_evaluation"]["reasoning"] = psycho_narrative
+                # Or keep the old reasoning and add this as summary? 
+                # User request: "converts it into a neat formal paragraph which is easily readable"
+                # Replacing 'reasoning' seems best as that's what is displayed on the frontend.
+            else:
+                 rationale_data["psychometric_evaluation"] = {
+                     "grade": "Insight",
+                     "reasoning": psycho_narrative
+                 }
         
         # Save to DB
         rationale_record = CandidateRationale.query.filter_by(candidate_id=candidate_id).first()

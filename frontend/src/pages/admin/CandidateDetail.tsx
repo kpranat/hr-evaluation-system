@@ -1,5 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Download, Mail, Calendar, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Download, Mail, Calendar, CheckCircle, XCircle, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { recruiterApi } from '@/lib/api';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +51,7 @@ export default function CandidateDetail() {
   const { id } = useParams<{ id: string }>();
   const [candidate, setCandidate] = useState<CandidateDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -90,6 +93,28 @@ export default function CandidateDetail() {
       console.error('Error fetching candidate details:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateRationale = async () => {
+    if (!candidate) return;
+
+    try {
+      setGenerating(true);
+      const result = await recruiterApi.generateRationale(candidate.id);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Refresh candidate details to show new rationale
+      if (id) await fetchCandidateDetail(id);
+
+    } catch (err) {
+      console.error('Error generating rationale:', err);
+      // Could show toast here
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -204,9 +229,29 @@ export default function CandidateDetail() {
         {/* Card 1: AI Rationale (Spans 2 columns on large screens) */}
         <Card className="md:col-span-2 lg:col-span-2 h-full flex flex-col">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <span className="bg-primary/10 p-2 rounded-lg">🤖</span>
-              AI Decision Rationale
+            <CardTitle className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <span className="bg-primary/10 p-2 rounded-lg">🤖</span>
+                AI Decision Rationale
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateRationale}
+                disabled={generating}
+              >
+                {generating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Generate Analysis
+                  </>
+                )}
+              </Button>
             </CardTitle>
             <CardDescription>
               Analysis generated regarding the hiring decision.
@@ -234,7 +279,7 @@ export default function CandidateDetail() {
               </div>
               <Progress value={candidate.technical_score} className="h-3" />
               <p className="text-xs text-muted-foreground">
-                MCQ: {candidate.mcq_result.correct_answers}/{candidate.mcq_result.correct_answers + candidate.mcq_result.wrong_answers} correct
+                MCQ Accuracy: {candidate.mcq_result.correct_answers} correct / {candidate.mcq_result.correct_answers + candidate.mcq_result.wrong_answers} total
               </p>
             </div>
 
@@ -283,37 +328,37 @@ export default function CandidateDetail() {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Extraversion</span>
-                  <span className="text-sm font-bold">{candidate.psychometric_result.extraversion.toFixed(1)}/100</span>
+                  <span className="text-sm font-bold">{candidate.psychometric_result.extraversion.toFixed(1)}/5</span>
                 </div>
-                <Progress value={candidate.psychometric_result.extraversion} className="h-2" />
+                <Progress value={candidate.psychometric_result.extraversion * 20} className="h-2" />
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Agreeableness</span>
-                  <span className="text-sm font-bold">{candidate.psychometric_result.agreeableness.toFixed(1)}/100</span>
+                  <span className="text-sm font-bold">{candidate.psychometric_result.agreeableness.toFixed(1)}/5</span>
                 </div>
-                <Progress value={candidate.psychometric_result.agreeableness} className="h-2" />
+                <Progress value={candidate.psychometric_result.agreeableness * 20} className="h-2" />
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Conscientiousness</span>
-                  <span className="text-sm font-bold">{candidate.psychometric_result.conscientiousness.toFixed(1)}/100</span>
+                  <span className="text-sm font-bold">{candidate.psychometric_result.conscientiousness.toFixed(1)}/5</span>
                 </div>
-                <Progress value={candidate.psychometric_result.conscientiousness} className="h-2" />
+                <Progress value={candidate.psychometric_result.conscientiousness * 20} className="h-2" />
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Emotional Stability</span>
-                  <span className="text-sm font-bold">{candidate.psychometric_result.emotional_stability.toFixed(1)}/100</span>
+                  <span className="text-sm font-bold">{candidate.psychometric_result.emotional_stability.toFixed(1)}/5</span>
                 </div>
-                <Progress value={candidate.psychometric_result.emotional_stability} className="h-2" />
+                <Progress value={candidate.psychometric_result.emotional_stability * 20} className="h-2" />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Intellect/Imagination</span>
-                  <span className="text-sm font-bold">{candidate.psychometric_result.intellect_imagination.toFixed(1)}/100</span>
+                  <span className="text-sm font-bold">{candidate.psychometric_result.intellect_imagination.toFixed(1)}/5</span>
                 </div>
-                <Progress value={candidate.psychometric_result.intellect_imagination} className="h-2" />
+                <Progress value={candidate.psychometric_result.intellect_imagination * 20} className="h-2" />
               </div>
             </div>
           </CardContent>

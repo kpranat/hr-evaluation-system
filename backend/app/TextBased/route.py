@@ -183,6 +183,12 @@ def submit_text_based_answer():
             
             print(f"✅ Updated answer for candidate {candidate_id}, question {question_id}")
             
+            # FIX: Update candidate's last active timestamp
+            candidate = CandidateAuthModel.query.get(candidate_id)
+            if candidate:
+                candidate.text_based_completed_at = datetime.now()
+                db.session.commit()
+            
             return jsonify({
                 'success': True,
                 'message': 'Answer updated successfully',
@@ -201,6 +207,12 @@ def submit_text_based_answer():
             db.session.commit()
             
             print(f"✅ Created new answer for candidate {candidate_id}, question {question_id}")
+            
+            # FIX: Update candidate's last active timestamp
+            candidate = CandidateAuthModel.query.get(candidate_id)
+            if candidate:
+                candidate.text_based_completed_at = datetime.now()
+                db.session.commit()
             
             return jsonify({
                 'success': True,
@@ -298,7 +310,7 @@ def complete_text_based_test():
         
         # Mark as completed
         candidate.text_based_completed = True
-        candidate.text_based_completed_at = datetime.utcnow()
+        candidate.text_based_completed_at = datetime.now()
         
         # AI Grading for Text Responses
         try:

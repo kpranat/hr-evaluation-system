@@ -33,6 +33,30 @@ def finish_assessment():
     print(f"\n🎓 Candidate {candidate_id} is finishing the assessment...")
     
     try:
+        from ..models import CandidateAuth
+        from ..extensions import db
+        from datetime import datetime
+
+        # Fetch candidate to update timestamps
+        candidate = CandidateAuth.query.get(candidate_id)
+        if candidate:
+            now = datetime.now()
+            # Update timestamps for completed sections to ensure valid sorting
+            # This effectively "bumps" the candidate to the top of the dashboard
+            if candidate.mcq_completed:
+                candidate.mcq_completed_at = now
+            if candidate.psychometric_completed:
+                candidate.psychometric_completed_at = now
+            if candidate.technical_completed:
+                candidate.technical_completed_at = now
+            if candidate.text_based_completed:
+                candidate.text_based_completed_at = now
+            if candidate.coding_completed:
+                candidate.coding_completed_at = now
+                
+            db.session.commit()
+            print(f"✅ Updated completion timestamps for Candidate {candidate_id}")
+        
         # Trigger the AI Rationale Service
         # We pass the current_app._get_current_object() to ensure the service 
         # uses the same app context/config if needed (though the service handles context creation too)

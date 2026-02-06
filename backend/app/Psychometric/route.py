@@ -420,11 +420,11 @@ def submit_test():
         except Exception as e:
             print(f"⚠️ AI Grading failed: {e}")
         
-        # Update candidate completion status
+        # Update candidate completion completion status
         candidate = CandidateAuth.query.get(candidate_id)
         if candidate:
             candidate.psychometric_completed = True
-            candidate.psychometric_completed_at = datetime.utcnow()
+            candidate.psychometric_completed_at = datetime.now()
             print(f"✅ Updated candidate {candidate_id} completion status")
         
         db.session.commit()

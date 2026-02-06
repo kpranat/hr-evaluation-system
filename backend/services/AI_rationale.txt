@@ -1,0 +1,22 @@
+{
+    "technical_evaluation": {
+        "grade": "Poor",
+        "reasoning": "Given the Technical Score of 0.0%, with 0 correct answers out of 0 total questions, it's clear that the candidate did not perform well in the technical assessment, indicating a significant gap in their technical knowledge."
+    },
+    "soft_skills_evaluation": {
+        "grade": "Poor",
+        "reasoning": "The Text Assessment remark highlights the candidate's poor communication skills, lack of specific examples, and insufficient depth of understanding, which suggests they struggle to articulate their thoughts and ideas effectively."
+    },
+    "psychometric_evaluation": {
+        "grade": "Insight",
+        "reasoning": "This candidate exhibits a low-key and reserved nature, typically preferring to work independently rather than engaging in social interactions. They tend to show limited concern for the feelings and needs of others, possibly due to a lack of empathy. Their work habits are often disorganized and lack focus, making it challenging to complete tasks efficiently. They also appear to be impulsive, prone to emotional outbursts, and struggle with emotional regulation."
+    },
+    "resume_fit": {
+        "grade": "Good",
+        "reasoning": "The candidate's resume showcases a strong educational background, with a high GPA (9.28/10) and relevant projects (e.g., Lung Disease Classification CNN, STARTIN' \u2013 Recruitment Platform), demonstrating their potential and interest in technical fields."
+    },
+    "final_decision": {
+        "status": "No Hire",
+        "summary": "While the candidate's resume suggests potential, their poor performance in both technical and soft skills assessments raises significant concerns about their readiness for a role, leading to a decision not to hire at this time."
+    }
+}

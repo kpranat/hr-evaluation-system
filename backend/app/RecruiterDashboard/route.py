@@ -12,6 +12,7 @@ from ..auth_helpers import verify_recruiter_token
 import jwt
 import pandas as pd
 import io
+from services.AI_rationale import process_ai_rationale
 
 
 @RecruiterDashboard.route('/candidates/upload', methods=['POST'])
@@ -719,7 +720,7 @@ def get_candidates():
         return error
     
     try:
-        from ..models import MCQResult, PsychometricResult, ProctoringViolation
+        from ..models import MCQResult, PsychometricResult, ProctoringViolation, TextAssessmentResult, TextBasedAnswer
         
         # Get recruiter's evaluation criteria (or use defaults)
         criteria = EvaluationCriteria.query.filter_by(recruiter_id=recruiter_id).first()
@@ -748,23 +749,20 @@ def get_candidates():
         }
         
         for candidate in candidates:
-            # Calculate technical score (from MCQ)
+            # Calculate technical score (from MCQ + Coding in future)
             mcq_result = MCQResult.query.filter_by(student_id=candidate.id).first()
             technical_score = mcq_result.percentage_correct if mcq_result else 0
             
-            # Calculate soft skill score (from Psychometric - average of Big Five traits)
-            psycho_result = PsychometricResult.query.filter_by(student_id=candidate.id).first()
-            if psycho_result:
-                # Big Five traits are scored 0-50, normalize to 0-100
-                soft_skill_score = (
-                    psycho_result.extraversion +
-                    psycho_result.agreeableness +
-                    psycho_result.conscientiousness +
-                    psycho_result.emotional_stability +
-                    psycho_result.intellect_imagination
-                ) / 5 * 2  # Convert 0-50 scale to 0-100
+            # Calculate soft skill score (from Text Assessment)
+            # Fetch from TextAssessmentResult instead of Psychometric
+            text_result = db.session.query(TextAssessmentResult).filter_by(candidate_id=candidate.id).first()
+            if text_result and text_result.grading_json:
+                # Expecting 'communication_score' or 'score' in grading_json
+                soft_skill_score = text_result.grading_json.get('communication_score', 0)
             else:
                 soft_skill_score = 0
+                
+            # Psychometric is NOT included in overall score anymore
             
             # Calculate fairplay score (from Proctoring Violations)
             violations = ProctoringViolation.query.filter_by(candidate_id=candidate.id).all()
@@ -786,7 +784,16 @@ def get_candidates():
                 stats['assessments_completed'] += 1
             
             # Calculate overall weighted score only if tests have been taken
+            # New weights: Technical 50%, Soft Skills 30%, Fairplay 20% (approx, or use criteria if available but adapted)
+            # Ignoring old criteria weights for now to enforce new logic as requested
+            
             if has_taken_test:
+                # specific user request: "technical skills based on mcq... soft skills based on text answers... psychometric shouldn't be considered"
+                # We will use fixed weights for now to ensure consistency with the request
+                tech_weight = 50
+                soft_weight = 30
+                fair_weight = 20
+                
                 overall_score = (
                     (technical_score * tech_weight / 100) +
                     (soft_skill_score * soft_weight / 100) +
@@ -808,6 +815,18 @@ def get_candidates():
                 overall_score = 0
                 status = 'Not Tested'
             
+            # Calculate last activity timestamp for sorting
+            timestamps = [
+                candidate.resume_uploaded_at,
+                candidate.mcq_completed_at,
+                candidate.psychometric_completed_at,
+                candidate.technical_completed_at,
+                candidate.text_based_completed_at,
+                candidate.coding_completed_at
+            ]
+            valid_timestamps = [ts for ts in timestamps if ts is not None]
+            last_active = max(valid_timestamps) if valid_timestamps else None
+
             candidates_data.append({
                 'id': candidate.id,
                 'email': candidate.email,
@@ -819,11 +838,16 @@ def get_candidates():
                 'overall_score': round(overall_score, 2) if has_taken_test else None,
                 'status': status,
                 'has_taken_test': has_taken_test,
+                'last_active': last_active.isoformat() if last_active else None,
                 'mcq_completed': candidate.mcq_completed,
                 'psychometric_completed': candidate.psychometric_completed,
                 'technical_completed': candidate.technical_completed,
                 'text_based_completed': candidate.text_based_completed
             })
+        
+        # Sort candidates by last_active descending (most recent first)
+        # Handle None values by treating them as oldest
+        candidates_data.sort(key=lambda x: x['last_active'] or "1970-01-01", reverse=True)
         
         return jsonify({
             'success': True,
@@ -906,7 +930,7 @@ def get_candidate_detail(candidate_id):
         return error
     
     try:
-        from ..models import MCQResult, PsychometricResult, TextBasedAnswer, ProctoringViolation
+        from ..models import MCQResult, PsychometricResult, TextBasedAnswer, ProctoringViolation, TextAssessmentResult, CandidateRationale
         
         # Get candidate
         candidate = CandidateAuth.query.get(candidate_id)
@@ -938,36 +962,34 @@ def get_candidate_detail(candidate_id):
             'percentage_correct': 0
         }
         
-        # Get Psychometric results
+        # Get Psychometric results (Do NOT include in overall score, display as /5)
         psycho_result = PsychometricResult.query.filter_by(student_id=candidate.id).first()
         if psycho_result:
-            soft_skill_score = (
-                psycho_result.extraversion +
-                psycho_result.agreeableness +
-                psycho_result.conscientiousness +
-                psycho_result.emotional_stability +
-                psycho_result.intellect_imagination
-            ) / 5 * 2
+            # Big Five traits are in DB as 0-50 (based on models.py comment/usage)
+            # User wants display out of 5. So divide by 10.
             psycho_data = {
-                'extraversion': round(psycho_result.extraversion * 2, 2),  # Convert to 0-100 scale
-                'agreeableness': round(psycho_result.agreeableness * 2, 2),
-                'conscientiousness': round(psycho_result.conscientiousness * 2, 2),
-                'emotional_stability': round(psycho_result.emotional_stability * 2, 2),
-                'intellect_imagination': round(psycho_result.intellect_imagination * 2, 2)
+                'extraversion': round(psycho_result.extraversion / 10, 1),
+                'agreeableness': round(psycho_result.agreeableness / 10, 1),
+                'conscientiousness': round(psycho_result.conscientiousness / 10, 1),
+                'emotional_stability': round(psycho_result.emotional_stability / 10, 1),
+                'intellect_imagination': round(psycho_result.intellect_imagination / 10, 1)
             }
         else:
-            soft_skill_score = 0
             psycho_data = {
-                'extraversion': 0,
-                'agreeableness': 0,
-                'conscientiousness': 0,
-                'emotional_stability': 0,
-                'intellect_imagination': 0
+                'extraversion': 0, 'agreeableness': 0, 'conscientiousness': 0,
+                'emotional_stability': 0, 'intellect_imagination': 0
             }
         
         # Get Text-based answers
         text_answers = TextBasedAnswer.query.filter_by(student_id=candidate.id).all()
         text_answers_data = [answer.to_dict() for answer in text_answers]
+        
+        # Calculate Soft Skill Score from Text Assessment Results
+        text_result = db.session.query(TextAssessmentResult).filter_by(candidate_id=candidate.id).first()
+        if text_result and text_result.grading_json:
+            soft_skill_score = text_result.grading_json.get('communication_score', 0)
+        else:
+            soft_skill_score = 0
         
         # Get Proctoring violations
         violations = ProctoringViolation.query.filter_by(candidate_id=candidate.id).all()
@@ -988,7 +1010,12 @@ def get_candidate_detail(candidate_id):
             })
         fairplay_score = max(0, fairplay_score)
         
-        # Calculate overall score
+        # Calculate overall score (Technical 50%, Soft 30%, Fairplay 20%)
+        # Psychometric is excluded
+        tech_weight = 50
+        soft_weight = 30
+        fair_weight = 20
+        
         overall_score = (
             (technical_score * tech_weight / 100) +
             (soft_skill_score * soft_weight / 100) +
@@ -1007,23 +1034,47 @@ def get_candidate_detail(candidate_id):
             verdict = 'No-Hire'
         
         # Generate AI rationale (placeholder - can be enhanced with actual AI service)
-        if verdict == 'Hire':
-            ai_rationale = f"Candidate {candidate.email} demonstrates strong performance across all assessment categories. "
-            ai_rationale += f"Technical proficiency score of {round(technical_score, 1)}% indicates solid problem-solving capabilities. "
-            if soft_skill_score >= 70:
-                ai_rationale += f"Psychometric assessment reveals excellent interpersonal skills and cultural fit. "
-            if fairplay_score >= 90:
-                ai_rationale += "Assessment integrity was maintained throughout, indicating strong ethical standards. "
-            ai_rationale += "Recommended for immediate consideration."
+        # Try to get AI Rationale from DB first
+        rationale_record = CandidateRationale.query.filter_by(candidate_id=candidate.id).first()
+        ai_rationale = ""
+        
+        if rationale_record and rationale_record.rationale_json:
+            # Format the JSON into a readable string for the frontend
+            r_json = rationale_record.rationale_json
+            
+            # Construct summary
+            if 'final_decision' in r_json and 'summary' in r_json['final_decision']:
+                 ai_rationale += f"{r_json['final_decision']['summary']}\n\n"
+                 
+            # Add Psychometric Insight if available (and specifically requested "neat paragraph")
+            if 'psychometric_evaluation' in r_json and 'reasoning' in r_json['psychometric_evaluation']:
+                ai_rationale += f"Psychometric Analysis: {r_json['psychometric_evaluation']['reasoning']}\n\n"
+                
+            # Add Technical/Soft Skill quick notes if not covered
+            if 'technical_evaluation' in r_json:
+                ai_rationale += f"Technical: {r_json['technical_evaluation'].get('grade', 'N/A')}. "
+            if 'soft_skills_evaluation' in r_json:
+                ai_rationale += f"Soft Skills: {r_json['soft_skills_evaluation'].get('grade', 'N/A')}."
+                
         else:
-            ai_rationale = f"Candidate {candidate.email} shows areas requiring improvement. "
-            if technical_score < 60:
-                ai_rationale += "Technical assessment score suggests need for additional skill development. "
-            if soft_skill_score < 60:
-                ai_rationale += "Psychometric evaluation indicates potential challenges with team dynamics or role fit. "
-            if fairplay_score < 80:
-                ai_rationale += "Multiple integrity concerns were flagged during assessment. "
-            ai_rationale += "Consider for future opportunities after further development."
+            # Fallback to placeholder if no AI generation exists yet
+            if verdict == 'Hire':
+                ai_rationale = f"Candidate {candidate.email} demonstrates strong performance across all assessment categories. "
+                ai_rationale += f"Technical proficiency score of {round(technical_score, 1)}% indicates solid problem-solving capabilities. "
+                if soft_skill_score >= 70:
+                    ai_rationale += f"Psychometric assessment reveals excellent interpersonal skills and cultural fit. "
+                if fairplay_score >= 90:
+                    ai_rationale += "Assessment integrity was maintained throughout, indicating strong ethical standards. "
+                ai_rationale += "Recommended for immediate consideration."
+            else:
+                ai_rationale = f"Candidate {candidate.email} shows areas requiring improvement. "
+                if technical_score < 60:
+                    ai_rationale += "Technical assessment score suggests need for additional skill development. "
+                if soft_skill_score < 60:
+                    ai_rationale += "Psychometric evaluation indicates potential challenges with team dynamics or role fit. "
+                if fairplay_score < 80:
+                    ai_rationale += "Multiple integrity concerns were flagged during assessment. "
+                ai_rationale += "Consider for future opportunities after further development."
         
         candidate_data = {
             'id': candidate.id,
@@ -1052,6 +1103,65 @@ def get_candidate_detail(candidate_id):
     except Exception as e:
         import traceback
         print(f"\n❌ GET CANDIDATE DETAIL ERROR: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'An error occurred: {str(e)}'
+        }), 500
+
+
+@RecruiterDashboard.route('/candidates/<int:candidate_id>/analyze', methods=['POST'])
+def analyze_candidate(candidate_id):
+    """
+    TRIGGER AI ANALYSIS ENDPOINT
+    
+    Manually triggers the AI Rationale generation for a specific candidate.
+    Useful for refreshing analysis or generating it if it failed/was skipped.
+    
+    Authentication: Required (JWT Bearer token - recruiter only)
+    
+    Response:
+        {
+            "success": true,
+            "message": "AI Analysis generated successfully",
+            "rationale": { <JSON object from AI> }
+        }
+    """
+    # Verify recruiter authentication
+    recruiter_id, error = verify_recruiter_token()
+    if error:
+        return error
+        
+    try:
+        from flask import current_app
+        
+        # Check if candidate exists
+        candidate = CandidateAuth.query.get(candidate_id)
+        if not candidate:
+            return jsonify({
+                'success': False,
+                'message': 'Candidate not found'
+            }), 404
+            
+        # Trigger analysis
+        # We pass the current app context to the service function
+        rationale_result = process_ai_rationale(candidate_id, app_instance=current_app._get_current_object())
+        
+        if not rationale_result:
+             return jsonify({
+                'success': False,
+                'message': 'Failed to generate analysis'
+            }), 500
+            
+        return jsonify({
+            'success': True,
+            'message': 'AI Analysis generated successfully',
+            'rationale': rationale_result
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        print(f"\n❌ ANALYZE CANDIDATE ERROR: {str(e)}")
         print(traceback.format_exc())
         return jsonify({
             'success': False,

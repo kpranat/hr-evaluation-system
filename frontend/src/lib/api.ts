@@ -132,6 +132,18 @@ export const recruiterApi = {
       method: 'GET',
     });
   },
+  /** Generate dynamic AI Rationale */
+  generateRationale: async (candidateId: number) => {
+    const token = localStorage.getItem('recruiterToken');
+    if (!token) return { data: null, error: 'Auth required' };
+
+    return request(`/recruiter-dashboard/candidates/${candidateId}/analyze`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  },
 };
 
 // ============ Admin/Recruiter Endpoints ============
@@ -139,7 +151,7 @@ export const recruiterApi = {
 export const adminApi = {
   /** Get all candidates */
   getCandidates: async () => {
-    return request('/api/admin/candidates');
+    return request('/recruiter-dashboard/candidates'); // Corrected this one too while I'm here as it probably was /api/admin
   },
 
   /** Get single candidate details */

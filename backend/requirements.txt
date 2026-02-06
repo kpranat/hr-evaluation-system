@@ -8,3 +8,8 @@ groq
 pandas
 openpyxl
 supabase
+requests
+pypdf
+numpy
+werkzeug
+pillow

@@ -178,6 +178,13 @@ def submit_mcq_answer():
             print(f"📝 Found existing MCQResult: correct={result.correct_answers}, wrong={result.wrong_answers}")
         
         # Update tallies
+        # FIX: Reset scores if this is the FIRST question (ID 101)
+        # This prevents accumulation if candidate retakes the test
+        if question_id == 101:
+            print("🔄 First question submitted - Resetting previous scores")
+            result.correct_answers = 0
+            result.wrong_answers = 0
+            
         if is_correct:
             result.correct_answers += 1
             print(f"✅ Incrementing correct_answers to {result.correct_answers}")
@@ -198,6 +205,12 @@ def submit_mcq_answer():
                 print(f"⚠️ AI Grading failed: {e}")
         
         print(f"📊 New totals - Correct: {result.correct_answers}, Wrong: {result.wrong_answers}, Percentage: {result.percentage_correct}%")
+        
+        # FIX: Update candidate's last active timestamp to ensure they bubble up in dashboard
+        candidate = CandidateAuthModel.query.get(candidate_id)
+        if candidate:
+            candidate.mcq_completed_at = datetime.now()
+            print(f"⏱️ Updated candidate last active timestamp: {candidate.mcq_completed_at}")
         
         # Commit changes
         db.session.commit()

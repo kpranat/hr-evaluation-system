@@ -424,6 +424,12 @@ def submit_solution():
         
         print(f"✅ Submission saved: ID={submission.id}, Status={status}, Score={score_percentage:.1f}% ({passed_count}/{total_count})")
         
+        # FIX: Update candidate's last active timestamp
+        candidate = CandidateAuth.query.get(candidate_id)
+        if candidate:
+            candidate.coding_completed_at = datetime.now()
+            db.session.commit()
+        
         return jsonify({
             'success': True,
             'submission_id': submission.id,
@@ -527,7 +533,7 @@ def complete_coding_round():
         
         # Mark as completed (allow recompletion for testing)
         candidate.coding_completed = True
-        candidate.coding_completed_at = datetime.utcnow()
+        candidate.coding_completed_at = datetime.now()
         
         db.session.commit()
         
