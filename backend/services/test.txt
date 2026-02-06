@@ -1,0 +1,57 @@
+{
+    "Name": "Aishwarya Ambalgikar",
+    "Email": "aishwaryaambalgikar@gmail.com",
+    "TechnicalSkills": [
+        "Java",
+        "PHP",
+        "MySQL",
+        "PostgreSQL",
+        "Python",
+        "Selenium",
+        "AngularJS",
+        "HTML",
+        "JavaScript",
+        "CSS",
+        "C",
+        "C++",
+        "Windchill Bulk Migrator (WBM)",
+        "Database Management",
+        "Data Cleansing & Validation",
+        "Troubleshooting & Issue Resolution",
+        "MobaXterm",
+        "Oracle",
+        "GIT",
+        "JIRA",
+        "Eclipse",
+        "Windchill"
+    ],
+    "Experience": 7,
+    "Projects": [
+        {
+            "Project": "Scarab to PDM Data Migration",
+            "Summary": "Data Loading Activities via Loader Template. Data Loading via Windchill Bulk Migrator. Developed scripts in Python and PHP for data filtering utilities."
+        },
+        {
+            "Project": "Matrix to PDM Data Migration",
+            "Summary": "Working on WBMFF CAD Metadata Extractor for migration of CAD Data. Developed scripts in Python for data filtering utilities and data reports. Working on Windchill Bulk Migrator (WBM) for non-Windchill to Windchill data migration projects, including installation and configuration of WBM in client environments."
+        },
+        {
+            "Project": "Process Testing (DTAG)",
+            "Summary": "Automation Script Maintenance, Participating in PI Planning, and Smoke Test Execution are the primary roles in my profile. Scripts are developed using languages such as Java, Selenium, VBScript. Awarded as Best Performer in the team within a year."
+        }
+    ],
+    "Education": [
+        {
+            "Degree": "Master in Computer Science",
+            "University": "Savitribai Phule Pune University",
+            "Year": "2020 - 2022",
+            "Percentage": "76.70%"
+        },
+        {
+            "Degree": "Bachelor in Computer Science",
+            "University": "Savitribai Phule Pune University",
+            "Year": "2017 - 2020",
+            "CGPA": "9.43"
+        }
+    ]
+}
