@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { Video, Shield, AlertCircle, Maximize2, Minimize2 } from 'lucide-react';
+import { Video, Shield, AlertCircle, Maximize2, Minimize2, UserX, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -7,11 +7,13 @@ interface WebcamMonitorProps {
   className?: string;
   stream?: MediaStream | null; // Stream to display
   status: 'active' | 'warning' | 'error' | 'idle';
+  noFaceCount?: number;
+  multipleFacesCount?: number;
 }
 
 type MonitoringStatus = 'active' | 'warning' | 'error' | 'idle';
 
-export const WebcamMonitor = forwardRef<HTMLVideoElement, WebcamMonitorProps>(({ className, stream, status: externalStatus }, ref) => {
+export const WebcamMonitor = forwardRef<HTMLVideoElement, WebcamMonitorProps>(({ className, stream, status: externalStatus, noFaceCount = 0, multipleFacesCount = 0 }, ref) => {
   const [isMinimized, setIsMinimized] = useState(false);
   const [status, setStatus] = useState<MonitoringStatus>(externalStatus || 'active');
   const videoRef = useRef<HTMLVideoElement>(null); // Internal ref
@@ -139,6 +141,20 @@ export const WebcamMonitor = forwardRef<HTMLVideoElement, WebcamMonitorProps>(({
           </>
         )}
       </div>
+
+      {/* Face Detection Stats Bar */}
+      {(noFaceCount > 0 || multipleFacesCount > 0) && (
+        <div className="grid grid-cols-2 gap-1 px-3 py-2 border-t border-border/50 bg-background/50">
+          <div className="flex items-center gap-2 text-destructive">
+            <UserX className="h-3.5 w-3.5" />
+            <span className="text-xs font-semibold">{noFaceCount} No Face</span>
+          </div>
+          <div className="flex items-center gap-2 text-orange-500">
+            <Users className="h-3.5 w-3.5" />
+            <span className="text-xs font-semibold">{multipleFacesCount} Multiple</span>
+          </div>
+        </div>
+      )}
 
       {/* Status Bar */}
       <div className={cn(

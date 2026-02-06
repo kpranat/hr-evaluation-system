@@ -101,6 +101,10 @@ export default function CodingTest() {
   const [config, setConfig] = useState<any>(null);
   const [timerStarted, setTimerStarted] = useState(false);
 
+  // Local Violation Counts
+  const [noFaceCount, setNoFaceCount] = useState(0);
+  const [multipleFacesCount, setMultipleFacesCount] = useState(0);
+
   // AI Proctoring Integration
   const {
     sessionId: proctorSessionId,
@@ -129,6 +133,13 @@ export default function CodingTest() {
       };
 
       const backendType = violationTypeMap[type] || type.toLowerCase();
+
+      // Update local counts for ActivityMonitor
+      if (backendType === 'no_face') {
+        setNoFaceCount(prev => prev + 1);
+      } else if (backendType === 'multiple_faces') {
+        setMultipleFacesCount(prev => prev + 1);
+      }
 
       console.log(`🚨 Face detection violation: ${backendType}`, details);
       toast.error(`Security Alert: ${details}`);
@@ -810,12 +821,16 @@ export default function CodingTest() {
           stream={stream}
           status={proctorStatus}
           className=""
+          noFaceCount={noFaceCount}
+          multipleFacesCount={multipleFacesCount}
         />
 
         {/* Activity Monitor */}
         <ActivityMonitor
           className="w-64"
           onViolation={logViolation}
+          noFaceCount={noFaceCount}
+          multipleFacesCount={multipleFacesCount}
         />
       </div>
     </div>

@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Activity, Keyboard, Copy, MousePointer, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Activity, Keyboard, Copy, MousePointer, AlertTriangle, ChevronLeft, ChevronRight, UserX, Users } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ActivityEvent {
-    type: 'keystroke' | 'copy' | 'paste' | 'mouse_exit' | 'tab_switch';
+    type: 'keystroke' | 'copy' | 'paste' | 'mouse_exit' | 'tab_switch' | 'no_face' | 'multiple_faces';
     timestamp: Date;
     details?: string;
 }
@@ -15,9 +15,11 @@ interface ActivityMonitorProps {
     className?: string;
     onToggle?: (visible: boolean) => void;
     onViolation: (type: string, details?: any) => void;
+    noFaceCount?: number;
+    multipleFacesCount?: number;
 }
 
-export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMonitorProps) {
+export function ActivityMonitor({ className, onToggle, onViolation, noFaceCount = 0, multipleFacesCount = 0 }: ActivityMonitorProps) {
     const [events, setEvents] = useState<ActivityEvent[]>([]);
     const [keystrokeCount, setKeystrokeCount] = useState(0);
     const [copyCount, setCopyCount] = useState(0);
@@ -157,6 +159,34 @@ export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMo
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, [logActivity]);
 
+    // Track Face Detection Violations (Props-based)
+    const prevNoFaceCount = useRef(noFaceCount);
+    const prevMultipleFacesCount = useRef(multipleFacesCount);
+
+    useEffect(() => {
+        if (noFaceCount > prevNoFaceCount.current) {
+            setSuspiciousCount(prev => prev + 1);
+            addEvent({
+                type: 'no_face',
+                timestamp: new Date(),
+                details: 'No face detected'
+            });
+        }
+        prevNoFaceCount.current = noFaceCount;
+    }, [noFaceCount]);
+
+    useEffect(() => {
+        if (multipleFacesCount > prevMultipleFacesCount.current) {
+            setSuspiciousCount(prev => prev + 1);
+            addEvent({
+                type: 'multiple_faces',
+                timestamp: new Date(),
+                details: 'Multiple faces detected'
+            });
+        }
+        prevMultipleFacesCount.current = multipleFacesCount;
+    }, [multipleFacesCount]);
+
     const addEvent = (event: ActivityEvent) => {
         setEvents(prev => [event, ...prev].slice(0, 5)); // Keep last 5 events
     };
@@ -168,11 +198,15 @@ export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMo
             case 'paste': return <Copy className="h-3 w-3" />;
             case 'mouse_exit': return <MousePointer className="h-3 w-3" />;
             case 'tab_switch': return <AlertTriangle className="h-3 w-3" />;
+            case 'no_face': return <UserX className="h-3 w-3" />;
+            case 'multiple_faces': return <Users className="h-3 w-3" />;
         }
     };
 
     const getEventColor = (type: ActivityEvent['type']) => {
         if (type === 'keystroke') return 'text-muted-foreground';
+        if (type === 'no_face') return 'text-destructive';
+        if (type === 'multiple_faces') return 'text-orange-500';
         return 'text-warning';
     };
 
@@ -199,7 +233,10 @@ export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMo
     }
 
     return (
-        <Card className={cn("p-3 space-y-3", className)}>
+        <Card className={cn("p-3 space-y-3 transition-colors duration-300",
+            (noFaceCount > 0 || multipleFacesCount > 0) ? "border-destructive shadow-red-500/20" : "",
+            className
+        )}>
             {/* Header */}
             <div className="flex items-center gap-2 pb-2 border-b border-border/50">
                 <Activity className="h-4 w-4 text-primary" />
@@ -238,10 +275,13 @@ export function ActivityMonitor({ className, onToggle, onViolation }: ActivityMo
                 </div>
             </div>
 
+
+            {/* Face Detection Stats removed - moved to WebcamMonitor */}
+
             {/* Recent Events */}
             <div className="space-y-1">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Recent Activity</p>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
+                <div className="space-y-1 h-32 overflow-y-auto pr-1">
                     {events.length === 0 ? (
                         <p className="text-xs text-muted-foreground/50 italic py-2">No activity yet</p>
                     ) : (
