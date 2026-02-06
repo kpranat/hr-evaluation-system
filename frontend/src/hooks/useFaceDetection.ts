@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import * as faceapi from 'face-api.js';
 
 export interface ViolationEvent {
-  type: 'NO_FACE' | 'MULTIPLE_FACES' | 'FACE_TOO_FAR' | 'FACE_TURNED';
+  type: 'NO_FACE' | 'MULTIPLE_FACES' | 'FACE_TOO_FAR' | 'FACE_TURNED' | 'PHONE_DETECTED' | 'LOOKING_AWAY';
   details: string;
 }
 
@@ -10,6 +9,7 @@ interface UseFaceDetectionOptions {
   enabled: boolean;
   detectionInterval?: number;
   onViolation: (event: ViolationEvent) => void;
+  sessionId?: string;
 }
 
 interface UseFaceDetectionReturn {
@@ -20,34 +20,19 @@ interface UseFaceDetectionReturn {
 
 export function useFaceDetection({
   enabled,
-  detectionInterval = 1000,
-  onViolation
+  detectionInterval = 2000,
+  onViolation,
+  sessionId
 }: UseFaceDetectionOptions): UseFaceDetectionReturn {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [isModelLoaded, setIsModelLoaded] = useState(false);
+  const [isModelLoaded, setIsModelLoaded] = useState(true); // Always true for backend-based
   const onViolationRef = useRef(onViolation);
 
   // Update ref when callback changes
   useEffect(() => {
     onViolationRef.current = onViolation;
   }, [onViolation]);
-
-  // Load Face-API Models
-  useEffect(() => {
-    const loadModels = async () => {
-      try {
-        console.log('🤖 Loading Face-API models...');
-        // Load the Tiny Face Detector model from public/models
-        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-        setIsModelLoaded(true);
-        console.log('✅ Face-API models loaded');
-      } catch (error) {
-        console.error('❌ Failed to load Face-API models:', error);
-      }
-    };
-    loadModels();
-  }, []);
 
   // Initialize Camera
   useEffect(() => {
@@ -96,46 +81,71 @@ export function useFaceDetection({
     };
   }, [enabled]);
 
-  // Run Detection Loop
+  // Run Backend Analysis Loop
   useEffect(() => {
-    if (!enabled || !isModelLoaded || !stream) return;
+    if (!enabled || !stream) return;
 
-    const detectFaces = async () => {
-      if (!videoRef.current || videoRef.current.paused || videoRef.current.ended || !isModelLoaded) return;
+    const analyzeFrame = async () => {
+      if (!videoRef.current || videoRef.current.paused || videoRef.current.ended) return;
 
       try {
-        // Use TinyFaceDetectorOptions for better performance on client devices
-        // scoreThreshold: minimum confidence (0.5 is standard)
-        // inputSize: processed image size (smaller = faster but less accurate for small faces)
-        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+        const video = videoRef.current;
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
 
-        const detections = await faceapi.detectAllFaces(videoRef.current, options);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Use default quality (0.92) or specify lower to save bandwidth
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
 
-        // Handle Violations
-        if (detections.length === 0) {
-          console.log('🚨 No face detected');
-          onViolationRef.current({
-            type: 'NO_FACE',
-            details: 'No face detected in frame'
-          });
-        } else if (detections.length > 1) {
-          console.log('🚨 Multiple faces detected');
-          onViolationRef.current({
-            type: 'MULTIPLE_FACES',
-            details: 'Multiple people detected'
-          });
+        const token = localStorage.getItem('candidate_token');
+        if (!token) {
+            console.warn("No candidate token found for proctoring");
+            return;
         }
+
+        const response = await fetch('/api/proctor/analyze-frame', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                image: imageData
+            })
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const analysis = data.analysis;
+
+        if (analysis) {
+            if (!analysis.face_detected) {
+                onViolationRef.current({ type: 'NO_FACE', details: 'No face detected in frame' });
+            } else if (analysis.multiple_faces) {
+                onViolationRef.current({ type: 'MULTIPLE_FACES', details: 'Multiple people detected' });
+            } else if (analysis.looking_away) {
+                onViolationRef.current({ type: 'LOOKING_AWAY', details: 'Candidate looking away' });
+            } else if (analysis.phone_detected) {
+                onViolationRef.current({ type: 'PHONE_DETECTED', details: 'Suspicious object/hand detected' });
+            }
+        }
+
       } catch (error) {
         console.warn('Face detection loop error:', error);
       }
     };
 
-    const intervalId = setInterval(detectFaces, detectionInterval);
+    const intervalId = setInterval(analyzeFrame, detectionInterval);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [enabled, isModelLoaded, stream, detectionInterval]);
+  }, [enabled, stream, detectionInterval, sessionId]);
 
   return { stream, videoRef, isModelLoaded };
 }

@@ -13,3 +13,4 @@ pypdf
 numpy
 werkzeug
 pillow
+mediapipe==0.10.14

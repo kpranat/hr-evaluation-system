@@ -230,16 +230,21 @@ def analyze_frame():
         return jsonify({'error': 'No image data provided'}), 400
 
     # Call AI Service
-    from ..services.ai_service import analyze_frame_with_llama
-    result = analyze_frame_with_llama(image_data)
+    from ..services.ai_service import analyze_frame
+    result = analyze_frame(image_data)
     
     # Auto-log if suspicious behavior detected
-    if result.get('multiple_faces') or result.get('looking_away') or result.get('phone_detected') or not result.get('face_detected'):
+    if (result.get('multiple_faces') or
+        result.get('looking_away') or
+        result.get('phone_detected') or
+        not result.get('face_detected')):
+
         # Log event internally
         event_type = 'suspicious_behavior'
         if result.get('multiple_faces'): event_type = 'multiple_faces'
         elif not result.get('face_detected'): event_type = 'no_face'
         elif result.get('looking_away'): event_type = 'looking_away'
+        elif result.get('phone_detected'): event_type = 'phone_detected'
         
         # Log to console for visibility
         log_proctor_event(event_type, session_id, user_id, result)
