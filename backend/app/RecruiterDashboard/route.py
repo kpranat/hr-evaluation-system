@@ -849,15 +849,48 @@ def get_candidates():
                     (fairplay_score * fair_weight / 100)
                 )
                 
-                # Determine status based on overall score
-                if overall_score >= 75:
+                # Default status from formula
+                if overall_score >= 70:
                     status = 'High Match'
-                    stats['high_match'] += 1
-                elif overall_score >= 50:
+                    verdict = 'Hire'
+                elif overall_score >= 40:
                     status = 'Potential'
-                    stats['potential'] += 1
+                    verdict = 'Potential'
                 else:
                     status = 'Reject'
+                    verdict = 'No-Hire'
+                
+                # --- AI VERDICT OVERRIDE ---
+                # If AI rationale exists, use AI's overall_score and verdict
+                rationale_record = CandidateRationale.query.filter_by(candidate_id=candidate.id).first()
+                if rationale_record and rationale_record.rationale_json:
+                    r_json = rationale_record.rationale_json
+                    if 'final_decision' in r_json:
+                        ai_status = r_json['final_decision'].get('status', '').strip()
+                        ai_overall = r_json['final_decision'].get('overall_score', None)
+                        
+                        if ai_overall is not None:
+                            try:
+                                overall_score = float(ai_overall)
+                            except (ValueError, TypeError):
+                                pass
+                        
+                        if ai_status in ('Hire', 'Strong Hire'):
+                            verdict = 'Hire'
+                            status = 'High Match'
+                        elif ai_status == 'Potential':
+                            verdict = 'Potential'
+                            status = 'Potential'
+                        elif ai_status in ('No Hire', 'No-Hire', 'Consider for Future'):
+                            verdict = 'No-Hire'
+                            status = 'Reject'
+                
+                # Update stats based on final verdict
+                if verdict == 'Hire':
+                    stats['high_match'] += 1
+                elif verdict == 'Potential':
+                    stats['potential'] += 1
+                else:
                     stats['reject'] += 1
             else:
                 # No test taken yet
@@ -902,6 +935,9 @@ def get_candidates():
             else:
                 frontend_status = 'pending'
 
+            # Add verdict field for frontend
+            candidate_verdict = verdict if has_taken_test else 'Pending'
+            
             candidates_data.append({
                 'id': candidate.id,
                 'email': candidate.email,
@@ -913,6 +949,7 @@ def get_candidates():
                 'overall_score': round(overall_score, 2) if has_taken_test else None,
                 'status': frontend_status,
                 'score_status': status,  # High Match, Potential, Reject
+                'verdict': candidate_verdict,  # Hire/No-Hire/Pending
                 'has_taken_test': has_taken_test,
                 'applied_date': last_active.strftime('%Y-%m-%d') if last_active else 'N/A',
                 'last_active': last_active.isoformat() if last_active else None,
@@ -1256,7 +1293,7 @@ def get_candidate_detail(candidate_id):
         fairplay_score = max(0, min(100, fairplay_score))  # Clamp between 0-100
         
         # Calculate overall score (Technical 50%, Soft 30%, Fairplay 20%)
-        # Psychometric is excluded
+        # This is the formula-based fallback. AI verdict overrides this if available.
         tech_weight = 50
         soft_weight = 30
         fair_weight = 20
@@ -1267,25 +1304,53 @@ def get_candidate_detail(candidate_id):
             (fairplay_score * fair_weight / 100)
         )
         
-        # Determine status and verdict
-        if overall_score >= 75:
+        # Default verdict from formula
+        if overall_score >= 70:
             status = 'High Match'
             verdict = 'Hire'
-        elif overall_score >= 50:
+        elif overall_score >= 40:
             status = 'Potential'
-            verdict = 'No-Hire'
+            verdict = 'Potential'
         else:
             status = 'Reject'
             verdict = 'No-Hire'
         
-        # Generate AI rationale (placeholder - can be enhanced with actual AI service)
-        # Try to get AI Rationale from DB first
+        # --- AI VERDICT OVERRIDE ---
+        # If AI rationale exists with a final_decision, use the AI's overall_score and verdict instead
         rationale_record = CandidateRationale.query.filter_by(candidate_id=candidate.id).first()
         ai_rationale = ""
         
         if rationale_record and rationale_record.rationale_json:
-            # Format the JSON into readable paragraphs with emoji headings (no markdown bold)
             r_json = rationale_record.rationale_json
+            
+            # Override verdict with AI's decision
+            if 'final_decision' in r_json:
+                ai_status = r_json['final_decision'].get('status', '').strip()
+                ai_overall = r_json['final_decision'].get('overall_score', None)
+                
+                # Use AI's overall_score if present
+                if ai_overall is not None:
+                    try:
+                        overall_score = float(ai_overall)
+                    except (ValueError, TypeError):
+                        pass  # Keep formula score
+                
+                # Map AI status to our verdict system
+                if ai_status in ('Hire', 'Strong Hire'):
+                    verdict = 'Hire'
+                    status = 'High Match'
+                elif ai_status == 'Potential':
+                    verdict = 'Potential'
+                    status = 'Potential'
+                elif ai_status in ('No Hire', 'No-Hire', 'Consider for Future'):
+                    verdict = 'No-Hire'
+                    status = 'Reject'
+                
+                print(f"\n🤖 AI VERDICT OVERRIDE for {candidate.email}:")
+                print(f"   AI Status: {ai_status}, AI Overall Score: {ai_overall}")
+                print(f"   Final → Verdict: {verdict}, Status: {status}, Overall: {overall_score}\n")
+            
+            # Format the JSON into readable paragraphs with emoji headings
             sections = []
             
             if 'resume_fit' in r_json:
@@ -1314,14 +1379,16 @@ def get_candidate_detail(candidate_id):
                 sections.append(f"🧠 Psychometric Insight ({grade})\n{reasoning}")
             
             if 'integrity_observation' in r_json:
-                status = r_json['integrity_observation'].get('status', 'N/A')
+                integrity_status = r_json['integrity_observation'].get('status', 'N/A')
                 reasoning = r_json['integrity_observation'].get('reasoning', '')
-                sections.append(f"🔒 Integrity ({status})\n{reasoning}")
+                sections.append(f"🔒 Integrity ({integrity_status})\n{reasoning}")
             
             if 'final_decision' in r_json:
-                status = r_json['final_decision'].get('status', 'N/A')
+                decision_status = r_json['final_decision'].get('status', 'N/A')
+                ai_score = r_json['final_decision'].get('overall_score', '')
                 summary = r_json['final_decision'].get('summary', '')
-                sections.append(f"✅ Final Verdict: {status}\n{summary}")
+                score_text = f" — Score: {ai_score}/100" if ai_score != '' else ''
+                sections.append(f"✅ Final Verdict: {decision_status}{score_text}\n{summary}")
             
             ai_rationale = "\n\n".join(sections)
                 

@@ -79,9 +79,9 @@ def generate_final_rationale(resume_data, mcq_score, text_remark, psychometric_a
     Final Verdict:
     • 5-7 sentences. Synthesize ALL sections into a cohesive narrative.
     • Name the candidate. Restate their strongest areas and their weakest areas.
-    • Explain why the chosen status (Hire / No Hire / Strong Hire / Consider for Future) is appropriate.
-    • If "Consider for Future", specify what the candidate should improve.
-    • End with a clear recommendation sentence (e.g., "Therefore, it is recommended to consider [Name] for future opportunities, rather than making an immediate hiring decision.").
+    • Explain why the chosen status (Hire / Potential / No Hire) is appropriate.
+    • If "Potential", specify what the candidate should improve and why they still show promise.
+    • End with a clear recommendation sentence.
 
     ── SCORING / GRADING RULES ──
 
@@ -124,6 +124,20 @@ def generate_final_rationale(resume_data, mcq_score, text_remark, psychometric_a
     - Always name the candidate where relevant.
     - Always reference specific project names, problem names, and assessment remarks.
 
+    ── FINAL VERDICT SCORING (CRITICAL — YOU decide the overall score) ──
+
+    You are the final judge. Based on your holistic evaluation of ALL sections above, assign an "overall_score" from 0 to 100.
+    This is YOUR intuitive score — do NOT simply average the individual scores. Use your judgment as a Senior Recruiter:
+    - Weight resume fit, technical ability, coding skills, soft skills, and integrity as you see fit.
+    - A candidate with an amazing resume but terrible test scores should NOT get a high overall score.
+    - A candidate with mediocre resume but excellent test performance SHOULD be rewarded.
+    - Use the full 0-100 range.
+
+    Then assign a status based on YOUR overall_score:
+    - overall_score >= 70 → "Hire" (strong candidate, recommend hiring)
+    - 40 <= overall_score < 70 → "Potential" (has promise, consider for future or conditional hire)
+    - overall_score < 40 → "No Hire" (not ready, significant gaps)
+
     OUTPUT FORMAT:
     Return ONLY valid JSON in the following format:
     {{
@@ -152,7 +166,8 @@ def generate_final_rationale(resume_data, mcq_score, text_remark, psychometric_a
             "reasoning": "2-3 sentences. Factual description of any concerns, with explicit statement that it does not affect hiring decision."
         }},
         "final_decision": {{
-             "status": "Hire" | "No Hire" | "Strong Hire" | "Consider for Future",
+             "status": "Hire" | "No Hire" | "Potential",
+             "overall_score": <integer 0-100>,
              "summary": "5-7 sentences. Comprehensive final verdict naming the candidate, synthesizing all evaluations, explaining the decision, and providing a clear recommendation."
         }}
     }}

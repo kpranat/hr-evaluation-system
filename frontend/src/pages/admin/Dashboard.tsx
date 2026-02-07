@@ -29,7 +29,9 @@ interface Candidate {
   soft_skill_score: number | null;
   fairplay_score: number | null;
   overall_score: number | null;
-  status: 'High Match' | 'Potential' | 'Reject' | 'Not Tested';
+  status: string;
+  score_status: 'High Match' | 'Potential' | 'Reject' | 'Not Tested';
+  verdict: 'Hire' | 'Potential' | 'No-Hire' | 'Pending';
   has_taken_test: boolean;
   mcq_completed: boolean;
   psychometric_completed: boolean;
@@ -103,6 +105,21 @@ export default function Dashboard() {
       case 'Reject':
         return 'bg-red-500/15 text-red-700 dark:text-red-400 hover:bg-red-500/25 border-red-500/20';
       case 'Not Tested':
+        return 'bg-gray-500/15 text-gray-700 dark:text-gray-400 hover:bg-gray-500/25 border-gray-500/20';
+      default:
+        return 'bg-gray-500/15 text-gray-700 dark:text-gray-400 hover:bg-gray-500/25';
+    }
+  };
+
+  const getVerdictColor = (verdict: string) => {
+    switch (verdict) {
+      case 'Hire':
+        return 'bg-green-500/15 text-green-700 dark:text-green-400 hover:bg-green-500/25 border-green-500/20';
+      case 'Potential':
+        return 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-500/25 border-yellow-500/20';
+      case 'No-Hire':
+        return 'bg-red-500/15 text-red-700 dark:text-red-400 hover:bg-red-500/25 border-red-500/20';
+      case 'Pending':
         return 'bg-gray-500/15 text-gray-700 dark:text-gray-400 hover:bg-gray-500/25 border-gray-500/20';
       default:
         return 'bg-gray-500/15 text-gray-700 dark:text-gray-400 hover:bg-gray-500/25';
@@ -210,7 +227,7 @@ export default function Dashboard() {
                       <TableHead>Soft Skill Score</TableHead>
                       <TableHead>Overall Score</TableHead>
                       <TableHead>Last Active</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Verdict</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -271,8 +288,8 @@ export default function Dashboard() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={getStatusColor(candidate.status)}>
-                            {candidate.status}
+                          <Badge variant="outline" className={getVerdictColor(candidate.verdict)}>
+                            {candidate.verdict}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
