@@ -39,7 +39,7 @@ interface CandidateDetail {
   fairplay_score: number;
   overall_score: number;
   status: string;
-  verdict: 'Hire' | 'No-Hire';
+  verdict: 'Hire' | 'Potential' | 'No-Hire';
   applied_date: string;
   mcq_result: MCQResult;
   psychometric_result: PsychometricResult;
@@ -85,6 +85,15 @@ export default function CandidateDetail() {
       const data = await response.json();
       if (data.success) {
         setCandidate(data.candidate);
+        console.log('📊 Candidate Data:', {
+          email: data.candidate.email,
+          technical_score: data.candidate.technical_score,
+          soft_skill_score: data.candidate.soft_skill_score,
+          fairplay_score: data.candidate.fairplay_score,
+          overall_score: data.candidate.overall_score,
+          status: data.candidate.status,
+          verdict: data.candidate.verdict
+        });
       } else {
         throw new Error(data.message || 'Failed to load candidate details');
       }
@@ -107,12 +116,18 @@ export default function CandidateDetail() {
         throw new Error(result.error);
       }
 
+      // Check if the backend returned success: false
+      const data = result.data as any;
+      if (data && !data.success) {
+        throw new Error(data.message || 'Analysis generation failed');
+      }
+
       // Refresh candidate details to show new rationale
       if (id) await fetchCandidateDetail(id);
 
     } catch (err) {
       console.error('Error generating rationale:', err);
-      // Could show toast here
+      alert(err instanceof Error ? err.message : 'Failed to generate analysis. Check server logs.');
     } finally {
       setGenerating(false);
     }
@@ -124,6 +139,14 @@ export default function CandidateDetail() {
         <Badge className="bg-green-600 hover:bg-green-700 text-white text-lg px-4 py-1.5 h-auto">
           <CheckCircle className="mr-2 h-5 w-5" />
           HIRE
+        </Badge>
+      );
+    }
+    if (verdict === 'Potential') {
+      return (
+        <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white text-lg px-4 py-1.5 h-auto">
+          <AlertTriangle className="mr-2 h-5 w-5" />
+          POTENTIAL
         </Badge>
       );
     }
@@ -258,7 +281,7 @@ export default function CandidateDetail() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <div className="bg-muted/30 p-6 rounded-xl border border-border/50 text-base leading-relaxed">
+            <div className="bg-muted/30 p-6 rounded-xl border border-border/50 text-base leading-relaxed whitespace-pre-wrap">
               {candidate.ai_rationale}
             </div>
           </CardContent>

@@ -42,6 +42,7 @@ interface Candidate {
   role?: string;
   overall_score: number | null;
   status: 'completed' | 'in-progress' | 'pending';
+  verdict?: 'Hire' | 'Potential' | 'No-Hire' | 'Pending';
   applied_date: string;
   suspension_info?: {
     is_suspended: boolean;
@@ -173,6 +174,7 @@ export default function Candidates() {
             <TableRow>
               <TableHead>Name/Email</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Verdict</TableHead>
               <TableHead>Score</TableHead>
               <TableHead>Date</TableHead>
               <TableHead className="w-10"></TableHead>
@@ -181,7 +183,7 @@ export default function Candidates() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                     <span className="text-muted-foreground">Loading candidates...</span>
@@ -190,7 +192,7 @@ export default function Candidates() {
               </TableRow>
             ) : filteredCandidates.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   <p className="text-muted-foreground">
                     {searchQuery ? 'No candidates found matching your search' : 'No candidates yet. Upload candidates to get started.'}
                   </p>
@@ -222,6 +224,20 @@ export default function Candidates() {
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={candidate.status} />
+                  </TableCell>
+                  <TableCell>
+                    {candidate.verdict ? (
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        candidate.verdict === 'Hire' ? 'bg-green-500/15 text-green-700 dark:text-green-400' :
+                        candidate.verdict === 'Potential' ? 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400' :
+                        candidate.verdict === 'No-Hire' ? 'bg-red-500/15 text-red-700 dark:text-red-400' :
+                        'bg-gray-500/15 text-gray-700 dark:text-gray-400'
+                      }`}>
+                        {candidate.verdict}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {candidate.overall_score !== null ? (
