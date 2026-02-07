@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: hr-evaluation-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn run:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hr-evaluation-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXP_MINUTES
+        value: 1440
+      # Add your Supabase and Groq API keys in Render dashboard
+
+databases:
+  - name: hr-evaluation-db
+    databaseName: hr_evaluation
+    user: hr_user

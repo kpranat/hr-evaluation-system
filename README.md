@@ -42,6 +42,12 @@ A comprehensive, AI-enhanced platform for automating candidate assessments, incl
 
 ## Installation & Setup
 
+### Quick Start
+See [QUICKSTART.md](./QUICKSTART.md) for rapid local development setup.
+
+### Production Deployment
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for deployment on Vercel (frontend) and Render (backend).
+
 ### 1. Clone the Repository
 ```bash
 git clone <repository-url>

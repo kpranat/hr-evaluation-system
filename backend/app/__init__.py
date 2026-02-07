@@ -1,4 +1,4 @@
-from flask import Flask, blueprints, send_from_directory
+from flask import Flask, blueprints, send_from_directory, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from .extensions import db
@@ -13,8 +13,10 @@ def create_app():
     app.config.from_object(Config)
     
     # Enable CORS for all routes (allow frontend to communicate)
-    # Simple global CORS configuration
-    CORS(app, origins="*", allow_headers=["Content-Type", "Authorization"], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    # In production, you can restrict origins to your Vercel domain
+    # Example: origins=["https://your-app.vercel.app", "http://localhost:8080"]
+    allowed_origins = os.getenv("FRONTEND_URL", "*").split(",") if os.getenv("FRONTEND_URL") else "*"
+    CORS(app, origins=allowed_origins, allow_headers=["Content-Type", "Authorization"], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
     
     # PostgreSQL config (override if needed for SSL)
     if app.config["SQLALCHEMY_DATABASE_URI"]:
@@ -71,6 +73,25 @@ def create_app():
     # Assessment routes (finish/rationale)
     from .Assessment import Assessment
     app.register_blueprint(Assessment, url_prefix='/api/assessment')
+
+    # Health check endpoint
+    @app.route('/health', methods=['GET'])
+    @app.route('/api/health', methods=['GET'])
+    def health_check():
+        """Health check endpoint for monitoring"""
+        try:
+            # Check database connection
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
+            db_status = 'healthy'
+        except Exception as e:
+            db_status = f'unhealthy: {str(e)}'
+        
+        return jsonify({
+            'status': 'ok',
+            'database': db_status,
+            'service': 'HR Evaluation System Backend'
+        }), 200
 
     # Import models before creating tables
     from . import models

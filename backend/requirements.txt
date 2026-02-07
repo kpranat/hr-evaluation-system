@@ -13,3 +13,4 @@ pypdf
 numpy
 werkzeug
 pillow
+gunicorn
