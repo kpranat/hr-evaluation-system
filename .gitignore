@@ -16,6 +16,12 @@ dist-ssr
 .agent
 venv
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 
 # Editor directories and files
 .vscode/*
