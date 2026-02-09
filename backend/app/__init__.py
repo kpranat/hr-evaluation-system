@@ -96,72 +96,91 @@ def create_app():
     # Import models before creating tables
     from . import models
     
+    # Initialize database tables (with error handling)
+    # This allows the app to start even if database is temporarily unavailable
     with app.app_context():
-        # Create all tables
-        db.create_all()
+        try:
+            # Check if DATABASE_URL is configured
+            if not app.config.get("SQLALCHEMY_DATABASE_URI"):
+                print("⚠️  WARNING: DATABASE_URL not configured. Database operations will fail.")
+                print("    Please set DATABASE_URL in your .env file.")
+                return app
+            
+            print("🔄 Initializing database...")
+            # Create all tables
+            db.create_all()
+            print("✅ Database tables created/verified")
+            
+            # Add columns to existing candidate_auth table if they don't exist
+            from sqlalchemy import text, inspect
+            inspector = inspect(db.engine)
+            
+            # Check if candidate_auth table exists
+            if 'candidate_auth' in inspector.get_table_names():
+                existing_columns = [col['name'] for col in inspector.get_columns('candidate_auth')]
+                
+                # Add missing resume columns
+                if 'resume_url' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN resume_url VARCHAR(500)"))
+                    print("✅ Added resume_url column to candidate_auth")
+                
+                if 'resume_filename' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN resume_filename VARCHAR(255)"))
+                    print("✅ Added resume_filename column to candidate_auth")
+                
+                if 'resume_uploaded_at' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN resume_uploaded_at TIMESTAMP"))
+                    print("✅ Added resume_uploaded_at column to candidate_auth")
+                
+                # Add missing round completion columns
+                if 'mcq_completed' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN mcq_completed BOOLEAN DEFAULT FALSE NOT NULL"))
+                    print("✅ Added mcq_completed column to candidate_auth")
+                
+                if 'mcq_completed_at' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN mcq_completed_at TIMESTAMP"))
+                    print("✅ Added mcq_completed_at column to candidate_auth")
+                
+                if 'psychometric_completed' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN psychometric_completed BOOLEAN DEFAULT FALSE NOT NULL"))
+                    print("✅ Added psychometric_completed column to candidate_auth")
+                
+                if 'psychometric_completed_at' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN psychometric_completed_at TIMESTAMP"))
+                    print("✅ Added psychometric_completed_at column to candidate_auth")
+                
+                if 'technical_completed' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN technical_completed BOOLEAN DEFAULT FALSE NOT NULL"))
+                    print("✅ Added technical_completed column to candidate_auth")
+                
+                if 'technical_completed_at' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN technical_completed_at TIMESTAMP"))
+                    print("✅ Added technical_completed_at column to candidate_auth")
+                
+                if 'text_based_completed' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN text_based_completed BOOLEAN DEFAULT FALSE NOT NULL"))
+                    print("✅ Added text_based_completed column to candidate_auth")
+                
+                if 'text_based_completed_at' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN text_based_completed_at TIMESTAMP"))
+                    print("✅ Added text_based_completed_at column to candidate_auth")
+                
+                if 'coding_completed' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN coding_completed BOOLEAN DEFAULT FALSE NOT NULL"))
+                    print("✅ Added coding_completed column to candidate_auth")
+                
+                if 'coding_completed_at' not in existing_columns:
+                    db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN coding_completed_at TIMESTAMP"))
+                    print("✅ Added coding_completed_at column to candidate_auth")
+                
+                db.session.commit()
+                print("✅ Database schema updated successfully")
         
-        # Add columns to existing candidate_auth table if they don't exist
-        from sqlalchemy import text, inspect
-        inspector = inspect(db.engine)
-        
-        # Check if candidate_auth table exists
-        if 'candidate_auth' in inspector.get_table_names():
-            existing_columns = [col['name'] for col in inspector.get_columns('candidate_auth')]
-            
-            # Add missing resume columns
-            if 'resume_url' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN resume_url VARCHAR(500)"))
-                print("✅ Added resume_url column to candidate_auth")
-            
-            if 'resume_filename' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN resume_filename VARCHAR(255)"))
-                print("✅ Added resume_filename column to candidate_auth")
-            
-            if 'resume_uploaded_at' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN resume_uploaded_at TIMESTAMP"))
-                print("✅ Added resume_uploaded_at column to candidate_auth")
-            
-            # Add missing round completion columns
-            if 'mcq_completed' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN mcq_completed BOOLEAN DEFAULT FALSE NOT NULL"))
-                print("✅ Added mcq_completed column to candidate_auth")
-            
-            if 'mcq_completed_at' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN mcq_completed_at TIMESTAMP"))
-                print("✅ Added mcq_completed_at column to candidate_auth")
-            
-            if 'psychometric_completed' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN psychometric_completed BOOLEAN DEFAULT FALSE NOT NULL"))
-                print("✅ Added psychometric_completed column to candidate_auth")
-            
-            if 'psychometric_completed_at' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN psychometric_completed_at TIMESTAMP"))
-                print("✅ Added psychometric_completed_at column to candidate_auth")
-            
-            if 'technical_completed' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN technical_completed BOOLEAN DEFAULT FALSE NOT NULL"))
-                print("✅ Added technical_completed column to candidate_auth")
-            
-            if 'technical_completed_at' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN technical_completed_at TIMESTAMP"))
-                print("✅ Added technical_completed_at column to candidate_auth")
-            
-            if 'text_based_completed' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN text_based_completed BOOLEAN DEFAULT FALSE NOT NULL"))
-                print("✅ Added text_based_completed column to candidate_auth")
-            
-            if 'text_based_completed_at' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN text_based_completed_at TIMESTAMP"))
-                print("✅ Added text_based_completed_at column to candidate_auth")
-            
-            if 'coding_completed' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN coding_completed BOOLEAN DEFAULT FALSE NOT NULL"))
-                print("✅ Added coding_completed column to candidate_auth")
-            
-            if 'coding_completed_at' not in existing_columns:
-                db.session.execute(text("ALTER TABLE candidate_auth ADD COLUMN coding_completed_at TIMESTAMP"))
-                print("✅ Added coding_completed_at column to candidate_auth")
-            
-            db.session.commit()
+        except Exception as e:
+            print(f"⚠️  WARNING: Database initialization failed: {str(e)}")
+            print("    The application will start, but database operations will not work.")
+            print("    Please check your DATABASE_URL and network connection.")
+            # Don't return here - let the app continue to start
+            # This allows health checks to respond even if DB is down
 
     return app
