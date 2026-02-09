@@ -33,6 +33,5 @@ __pycache__/
 *.njsproj
 *.sln
 *.sw?
-placeholder_functions.py
 prompt_testing.py
 example.txt
