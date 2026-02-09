@@ -1,5 +1,6 @@
 from app import create_app
 from app.background_tasks import start_session_monitor
+import os
 
 
 app = create_app()
@@ -17,8 +18,14 @@ if __name__ == '__main__':
     print("\n🚀 System ready!")
     print("="*60 + "\n")
     
+    # Get port from environment variable (Render sets this automatically)
+    # Default to 5000 for local development
+    port = int(os.getenv('PORT', 5000))
+    
     try:
-        app.run(debug=True, use_reloader=False)  # use_reloader=False prevents double execution
+        # host='0.0.0.0' allows external connections (required for deployment)
+        # debug=False in production (Render sets environment variables)
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except KeyboardInterrupt:
         print("\n\n" + "="*60)
         print("Shutting down...")
