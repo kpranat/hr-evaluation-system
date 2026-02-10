@@ -14,13 +14,20 @@ def create_app():
     app.config.from_object(Config)
     
     # Enable CORS for all routes (allow frontend to communicate)
-    # Allow all Vercel deployments (production, preview, and branch deployments)
-    allowed_origins = [
-        r"https://.*-kpranats-projects\.vercel\.app",  # All Vercel preview/branch deployments
-        r"http://localhost:\d+",  # Local development on any port
-    ]
+    # Custom origin validator to allow all Vercel deployments and localhost
+    def is_allowed_origin(origin):
+        if not origin:
+            return False
+        # Allow all Vercel deployments for this project (production, preview, branch)
+        if re.match(r"https://hr-evaluation-system.*\.vercel\.app$", origin):
+            return True
+        # Allow localhost on any port
+        if re.match(r"http://localhost:\d+$", origin):
+            return True
+        return False
+    
     CORS(app, 
-         origins=allowed_origins, 
+         origins=is_allowed_origin,
          supports_credentials=True,
          allow_headers=["Content-Type", "Authorization"], 
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
