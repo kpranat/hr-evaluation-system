@@ -16,7 +16,12 @@ def create_app():
     # In production, you can restrict origins to your Vercel domain
     # Example: origins=["https://your-app.vercel.app", "http://localhost:8080"]
     allowed_origins = os.getenv("FRONTEND_URL", "*").split(",") if os.getenv("FRONTEND_URL") else "*"
-    CORS(app, origins=allowed_origins, allow_headers=["Content-Type", "Authorization"], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    CORS(app, 
+         origins=allowed_origins, 
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization"], 
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         expose_headers=["Content-Type", "Authorization"])
     
     # PostgreSQL config (override if needed for SSL)
     if app.config["SQLALCHEMY_DATABASE_URI"]:
